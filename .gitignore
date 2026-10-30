@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# production & logs
+build/
+dist/
+dev.log
+server.log
+*.log
+
+# runtime data
+db/
+*.db
+*.db-journal
+
+# environment
+.env
+.env*.local
+
+# misc
+.DS_Store
+*.pem
+.zscripts/
+.vercel
+tsconfig.tsbuildinfo
+
+# sandbox-only tooling (not part of the game)
+.env
+Caddyfile
+upload/
+download/
+scripts/
+skills/
+examples/
+tests/
+mini-services/
+.agent*
+*.zip
