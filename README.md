@@ -9,6 +9,25 @@
 
 ---
 
+## 🎮 بازی کن / ⬇️ دانلود کن
+
+| | لینک |
+|---|---|
+| 🕹️ **بازی آنلاین** (بدون دانلود — اندروید، آیفون، ویندوز) | **[matin-mohebi.github.io/las-sombra](https://matin-mohebi.github.io/las-sombra/)** |
+| 📦 **دانلود نسخه وب آفلاین** (zip) | [las-sombra-web.zip](https://github.com/Matin-mohebi/las-sombra/releases/latest/download/las-sombra-web.zip) |
+| 🧩 **دانلود سورس کامل** (zip) | [las-sombra-source.zip](https://github.com/Matin-mohebi/las-sombra/releases/latest/download/las-sombra-source.zip) |
+| 🏷️ صفحه همه نسخه‌ها (Releases) | [github.com/Matin-mohebi/las-sombra/releases](https://github.com/Matin-mohebi/las-sombra/releases) |
+
+**اجرای نسخه آفلاین:** فایل zip را باز کنید، داخل پوشه یک سرور استاتیک راه بیندازید:
+```bash
+npx serve .            # با Node.js
+# یا
+python3 -m http.server 8000
+```
+سپس `http://localhost:8000` را در مرورگر باز کنید. (راهنمای فارسی داخل فایل zip هم هست.)
+
+---
+
 ## ✨ امکانات
 
 - 🌆 **شهر لاس سومبرا**: ساختمان‌های بلند، خیابان‌های آسفالته، پارک، پارکینگ، کلانتری، درمانگاه، اداره پست

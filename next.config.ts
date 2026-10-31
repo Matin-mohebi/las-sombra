@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   ...(pagesBuild
     ? {
         output: "export" as const,
+        distDir: ".next-export",
         basePath: basePath || undefined,
         trailingSlash: true,
         images: { unoptimized: true },
