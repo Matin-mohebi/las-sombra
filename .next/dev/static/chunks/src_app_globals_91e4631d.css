@@ -438,10 +438,6 @@
     position: static;
   }
 
-  .sticky {
-    position: sticky;
-  }
-
   .inset-0 {
     inset: calc(var(--spacing) * 0);
   }
@@ -701,14 +697,6 @@
 
   .hidden {
     display: none;
-  }
-
-  .inline {
-    display: inline;
-  }
-
-  .inline-block {
-    display: inline-block;
   }
 
   .inline-flex {

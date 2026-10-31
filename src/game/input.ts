@@ -75,6 +75,8 @@ export class Input {
     if (k === 'Digit1') this.queue.push('w1')
     if (k === 'Digit2') this.queue.push('w2')
     if (k === 'Digit3') this.queue.push('w3')
+    if (k === 'Digit4') this.queue.push('w4')
+    if (k === 'Digit5') this.queue.push('w5')
     if (k === 'KeyQ') this.queue.push('wcycle')
     if (k === 'KeyH') this.queue.push('horn')
     if (k === 'Space') { this.queue.push('jump'); e.preventDefault() }

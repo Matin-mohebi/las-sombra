@@ -3,7 +3,7 @@ module.exports = [
 
 __turbopack_context__.v((parentImport) => {
     return Promise.all([
-  "server/chunks/ssr/src_game_9ca6fbf4._.js",
+  "server/chunks/ssr/src_game_e5205216._.js",
   "server/chunks/ssr/node_modules_three_build_three_core_b2c80e70.js",
   "server/chunks/ssr/node_modules_three_build_three_module_ac56307a.js",
   "server/chunks/ssr/node_modules_three_examples_jsm_utils_BufferGeometryUtils_2b27591f.js"

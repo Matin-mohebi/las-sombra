@@ -8,6 +8,7 @@ import { Player } from './player'
 import { Combat } from './combat'
 import { Missions } from './missions'
 import { Hud } from './hud'
+import { Coins } from './collectibles'
 import { texGlow, clamp, smoothstep, lerp, faNum } from './utils'
 
 const SAVE_KEY = 'lasombra_save_v1'
@@ -18,6 +19,7 @@ interface SaveData {
   current?: number
   quality?: 'low' | 'med' | 'high'
   muted?: boolean
+  coins?: number[]
 }
 
 export type Quality = 'low' | 'med' | 'high'
@@ -51,6 +53,13 @@ export class Game {
   private policeSpawnT = 0
   private markerCd = 0
   private respawnPending = false
+  private coins!: Coins
+
+  // weather
+  private rainT = 0
+  private rainTarget = 0
+  private weatherT = 110
+  private garageCd = 0
 
   // sky
   private skyMat!: THREE.ShaderMaterial
@@ -117,6 +126,7 @@ export class Game {
     this.player = new Player(this.scene, this.world, this.vehicles, this.sfx, this.world.spots.start)
     this.combat = new Combat(this.scene, this.world, this.sfx, this.particles, this.vehicles, this.player, this.quality)
     this.missions = new Missions(this.scene, this.world, this.combat, this.vehicles, this.player, this.sfx)
+    this.coins = new Coins(this.scene, this.world, this.quality, saved.coins ?? [], (c, t, all) => this.onCoin(c, t, all))
 
     /* ---------- hooks ---------- */
     this.vehicles.hooks = {
@@ -152,6 +162,7 @@ export class Game {
 
     this.vehicles.spawnAll()
     this.combat.spawnBandits()
+    this.combat.spawnFarmRaiders()
     this.combat.spawnCivilians()
 
     // events
@@ -292,6 +303,7 @@ export class Game {
     this.input.clearQueue()
     this.sfx.engineUpdate(0, 0, false)
     this.sfx.sirenVol(0)
+    this.sfx.rainUpdate(0)
     this.hud.showPause()
   }
   /** pause without showing the pause menu (used when a game panel opens) */
@@ -356,6 +368,7 @@ export class Game {
         current: this.combat.current,
         quality: this.quality,
         muted: this.sfx.muted,
+        coins: Array.from(this.coins?.collected ?? []),
       }
       localStorage.setItem(SAVE_KEY, JSON.stringify(data))
     } catch { /* ignore */ }
@@ -414,6 +427,8 @@ export class Game {
     if (this.input.consume('w1')) this.combat.switchWeapon(0)
     if (this.input.consume('w2')) this.combat.switchWeapon(1)
     if (this.input.consume('w3')) this.combat.switchWeapon(2)
+    if (this.input.consume('w4')) this.combat.switchWeapon(3)
+    if (this.input.consume('w5')) this.combat.switchWeapon(4)
     if (this.input.consume('wcycle')) this.combat.cycleWeapon()
     if (this.input.consume('horn') && inVehicle?.kind === 'car') this.sfx.horn()
     if (this.input.consume('sprint-toggle')) this.player.sprintToggle = !this.player.sprintToggle
@@ -424,6 +439,8 @@ export class Game {
     this.vehicles.update(dt, this.player.pos, this.nightFactor, !!inVehicle)
     this.combat.update(dt, this.player.pos, this.player.speed, this.camera, this.time, inVehicle)
     this.missions.update(dt, this.player.pos, this.time)
+    this.coins.update(dt, this.player.pos)
+    this.updateWeather(dt)
     this.particles.update(dt)
     this.world.update(this.nightFactor, dt)
     this.updateSky(dt)
@@ -479,6 +496,22 @@ export class Game {
 
     // markers (mission giver / shop) auto-open
     this.checkMarkers()
+
+    // garage repair at gas stations
+    this.garageCd = Math.max(0, this.garageCd - dt)
+    if (inVehicle && inVehicle.kind === 'car' && inVehicle.health < 100 && this.garageCd <= 0 && this.nearGas()) {
+      const cost = Math.ceil((100 - inVehicle.health) * 0.4)
+      if (this.player.money >= cost) {
+        this.player.money -= cost
+        inVehicle.health = 100
+        this.garageCd = 5
+        this.sfx.buy()
+        this.hud.toast(`خودرو تعمیر شد — ${faNum(cost)} دلار`, 'info')
+        this.persist()
+      } else {
+        this.garageCd = 6
+      }
+    }
 
     // HUD
     const wpn = this.combat.hudWeapon()
@@ -537,7 +570,13 @@ export class Game {
     )
     this.skyMat.uniforms.topColor.value.copy(top)
     this.skyMat.uniforms.bottomColor.value.copy(bot)
-    ;(this.scene.fog as THREE.Fog).color.copy(fog)
+    if (this.rainT > 0.01) {
+      top.lerp(new THREE.Color(0x5a626c), 0.55 * this.rainT)
+      bot.lerp(new THREE.Color(0x8a929a), 0.5 * this.rainT)
+      this.skyMat.uniforms.topColor.value.copy(top)
+      this.skyMat.uniforms.bottomColor.value.copy(bot)
+    }
+    ;(this.scene.fog as THREE.Fog).color.copy(fog).multiplyScalar(1 - 0.4 * this.rainT)
 
     // sun / moon
     const isDay = elev > 0.02
@@ -547,13 +586,13 @@ export class Game {
     if (isDay) {
       this.skyMat.uniforms.sunColor.value.copy(sunCol)
       this.sunLight.color.copy(sunCol)
-      this.sunLight.intensity = lerp(1.5, 2.5, dayT)
+      this.sunLight.intensity = lerp(1.5, 2.5, dayT) * (1 - 0.55 * this.rainT)
     } else {
       this.skyMat.uniforms.sunColor.value.setRGB(0.55, 0.62, 0.8)
       this.sunLight.color.setHex(0x9db4d8)
-      this.sunLight.intensity = 0.8
+      this.sunLight.intensity = 0.8 * (1 - 0.55 * this.rainT)
     }
-    this.hemi.intensity = lerp(0.26, 0.58, dayT)
+    this.hemi.intensity = lerp(0.26, 0.58, dayT) * (1 - 0.3 * this.rainT)
     this.hemi.color.copy(bot).lerp(new THREE.Color(0xffffff), 0.4)
 
     // follow camera & player for shadow box
@@ -614,6 +653,62 @@ export class Game {
     return false
   }
 
+  private nearGas(): boolean {
+    for (const s of this.world.spots.gasStations) {
+      if (Math.hypot(s.x - this.player.pos.x, s.z - this.player.pos.z) < 11) return true
+    }
+    return false
+  }
+
+  private onCoin(count: number, total: number, all: boolean) {
+    this.player.money += 25
+    this.sfx.pickup()
+    this.hud.toast(`سکه گنج: ${faNum(count)} از ${faNum(total)} — ${faNum(25)} دلار`, 'gold')
+    if (all) {
+      this.player.money += 500
+      this.sfx.jingleWin()
+      this.hud.toast(`همه سکه‌های لاس سومبرا پیدا شد! جایزه ویژه: ${faNum(500)} دلار`, 'gold')
+    }
+    this.persist()
+  }
+
+  private updateWeather(dt: number) {
+    this.weatherT -= dt
+    if (this.weatherT <= 0) {
+      if (this.rainTarget > 0.5) {
+        this.rainTarget = 0
+        this.weatherT = 150 + Math.random() * 170
+      } else {
+        this.rainTarget = 0.55 + Math.random() * 0.45
+        this.weatherT = 70 + Math.random() * 70
+        this.hud.toast('ابرها سنگین شد... باران در راه است', 'info')
+      }
+    }
+    const before = this.rainT
+    const delta = this.rainTarget - this.rainT
+    this.rainT = clamp(this.rainT + clamp(delta, -dt / 8, dt / 8), 0, 1)
+    if (before < 0.06 && this.rainT >= 0.06) this.hud.toast('باران گرفت', 'info')
+    if (before > 0.06 && this.rainT <= 0.06) this.hud.toast('هوا صاف شد', 'info')
+    this.sfx.rainUpdate(this.rainT)
+
+    // falling rain streaks around the player
+    if (this.rainT > 0.12) {
+      const perFrame = this.quality === 'low' ? 4 : this.quality === 'med' ? 8 : 13
+      for (let i = 0; i < perFrame; i++) {
+        const a = Math.random() * Math.PI * 2
+        const r = Math.random() * 22
+        this.particles.spawn(new THREE.Vector3(
+          this.player.pos.x + Math.cos(a) * r,
+          11 + Math.random() * 4,
+          this.player.pos.z + Math.sin(a) * r,
+        ), {
+          color: 0xaebfd8, life: 0.55, size: 0.16, sizeEnd: 0.08,
+          vel: new THREE.Vector3(-3, -30, -1),
+        })
+      }
+    }
+  }
+
   private checkMarkers() {
     if (this.menuOpen || this.markerCd > 0 || this.player.dead) return
     const giver = this.missions.giverNear(this.player.pos)
@@ -628,7 +723,7 @@ export class Game {
       this.softPause()
       const owned = this.combat.weapons.map(w => w.owned)
       const w = this.combat.weapon
-      this.hud.showShop(owned, { pistol: 250, rifle: 600 }, true, `خشاب ${w.def.name} (${faNum(w.def.ammoPack)} تیر) — ${faNum(w.def.ammoCost)} دلار`)
+      this.hud.showShop(owned, { pistol: 250, rifle: 600, shotgun: 450, smg: 850 }, true, `خشاب ${w.def.name} (${faNum(w.def.ammoPack)} تیر) — ${faNum(w.def.ammoCost)} دلار`)
     }
   }
 
@@ -643,6 +738,8 @@ export class Game {
     this.vehicles.dispose()
     this.combat.dispose()
     this.missions.dispose()
+    this.coins?.dispose(this.scene)
+    this.sfx.rainStop()
     this.particles.dispose()
     this.persist()
     this.renderer.dispose()

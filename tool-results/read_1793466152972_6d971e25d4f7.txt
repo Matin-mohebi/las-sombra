@@ -1,0 +1,759 @@
+     1→     1→import * as THREE from 'three'
+     2→     2→import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+     3→     3→import {
+     4→     4→  Box2, rand, randi, pick, boxGeo, texDesert, texAsphalt, texSidewalk, texConcrete, texWood,
+     5→     5→  texGlow, texSign, texSmoke, clamp,
+     6→     6→} from './utils'
+     7→     7→
+     8→     8→export interface GraphNode { x: number; z: number }
+     9→     9→export interface MiniRect { x: number; z: number; hw: number; hd: number; t: string }
+    10→    10→export interface MiniRoad { x: number; z: number; len: number; vert: boolean }
+    11→    11→
+    12→    12→const V_ROADS = [-240, -120, 0, 120, 240]
+    13→    13→const H_ROADS = [-840, -660, -480, -300]
+    14→    14→const ROAD_W = 14
+    15→    15→const COLS = [
+    16→    16→  { x: -270, hw: 23 }, { x: -180, hw: 53 }, { x: -60, hw: 53 },
+    17→    17→  { x: 60, hw: 53 }, { x: 180, hw: 53 }, { x: 270, hw: 23 },
+    18→    18→]
+    19→    19→const ROWS = [
+    20→    20→  { z: -870, hd: 23 }, { z: -750, hd: 83 }, { z: -570, hd: 83 }, { z: -390, hd: 83 },
+    21→    21→]
+    22→    22→
+    23→    23→export const TOWN = { x0: -220, x1: 220, z0: 500, z1: 700, streetZ: 600 }
+    24→    24→export const WORLD_HALF = 1150
+    25→    25→
+    26→    26→export interface Camp { x: number; z: number; spawns: { x: number; z: number }[] }
+    27→    27→
+    28→    28→export class World {
+    29→    29→  group = new THREE.Group()
+    30→    30→  colliders: Box2[] = []
+    31→    31→  graph: { nodes: GraphNode[]; adj: number[][] } = { nodes: [], adj: [] }
+    32→    32→  lamps: THREE.Vector3[] = []
+    33→    33→  firePoints: THREE.Vector3[] = []
+    34→    34→  camps: Camp[] = []
+    35→    35→  minimap = { roads: [] as MiniRoad[], rects: [] as MiniRect[], camps: [] as { x: number; z: number }[] }
+    36→    36→  parkedSpots: { x: number; z: number; h: number; police?: boolean }[] = []
+    37→    37→  horseSpots: { x: number; z: number }[] = []
+    38→    38→  spots = {
+    39→    39→    start: { x: 4, z: 505 },
+    40→    40→    starterHorse: { x: 16, z: 512 },
+    41→    41→    starterCar: { x: -100, z: 596.5, h: Math.PI / 2 },
+    42→    42→    extraCar: { x: 9, z: 190, h: 0 },
+    43→    43→    hospital: { x: -60, z: -372 },
+    44→    44→    gunShops: [{ x: 30, z: 612 }, { x: 60, z: -372 }],
+    45→    45→    givers: {
+    46→    46→      delivery: { x: 165, z: -712 },
+    47→    47→      bounty: { x: -40, z: 592 },
+    48→    48→      race: { x: 60, z: -748 },
+    49→    49→      duel: { x: -5, z: 596 },
+    50→    50→      escape: { x: -95, z: -568 },
+    51→    51→    },
+    52→    52→    deliveryDrop: { x: -8, z: 590 },
+    53→    53→    bountyCamp: 1,
+    54→    54→    raceCp: [
+    55→    55→      { x: -180, z: -840 }, { x: 60, z: -840 }, { x: 240, z: -660 }, { x: 180, z: -480 },
+    56→    56→      { x: 0, z: -390 }, { x: -180, z: -480 }, { x: -240, z: -660 }, { x: -120, z: -840 },
+    57→    57→    ],
+    58→    58→    duelSpot: { x: 60, z: 725 },
+    59→    59→  }
+    60→    60→  // animated materials
+    61→    61→  lampHeadMat!: THREE.MeshLambertMaterial
+    62→    62→  windowMat!: THREE.MeshBasicMaterial
+    63→    63→  lampGlowMat!: THREE.PointsMaterial
+    64→    64→  poolMat!: THREE.MeshBasicMaterial
+    65→    65→  fireLights: THREE.PointLight[] = []
+    66→    66→  private fireFlick: number[] = []
+    67→    67→
+    68→    68→  constructor(private quality: 'low' | 'med' | 'high') {
+    69→    69→    this.buildGround()
+    70→    70→    this.buildRoads()
+    71→    71→    this.buildCity()
+    72→    72→    this.buildTown()
+    73→    73→    this.buildDesert()
+    74→    74→    this.buildGraph()
+    75→    75→  }
+    76→    76→
+    77→    77→  /** merge geometries with normalized attributes (index + color) */
+    78→    78→  private mergeAll(geos: THREE.BufferGeometry[], defaultColor = '#ffffff'): THREE.BufferGeometry {
+    79→    79→    const out = geos.map(g => {
+    80→    80→      const gg = g.index ? g.toNonIndexed() : g
+    81→    81→      if (!gg.attributes.color) {
+    82→    82→        const n = gg.attributes.position.count
+    83→    83→        const c = new THREE.Color(defaultColor)
+    84→    84→        const col = new Float32Array(n * 3)
+    85→    85→        for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b }
+    86→    86→        gg.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    87→    87→      }
+    88→    88→      return gg
+    89→    89→    })
+    90→    90→    return mergeGeometries(out, false)!
+    91→    91→  }
+    92→    92→
+    93→    93→  private inCity(x: number, z: number, m = 0) {
+    94→    94→    return x > -300 - m && x < 300 + m && z > -900 - m && z < -300 + m
+    95→    95→  }
+    96→    96→  private inTown(x: number, z: number, m = 0) {
+    97→    97→    return x > TOWN.x0 - m && x < TOWN.x1 + m && z > TOWN.z0 - m && z < TOWN.z1 + m
+    98→    98→  }
+    99→    99→  private nearRoad(x: number, z: number, m = 12) {
+   100→   100→    if (Math.abs(x) < m && z > -900 && z < 620) return true // highway
+   101→   101→    if (Math.abs(z - TOWN.streetZ) < m && x > TOWN.x0 && x < TOWN.x1) return true
+   102→   102→    return false
+   103→   103→  }
+   104→   104→
+   105→   105→  /* ================= ground ================= */
+   106→   106→  private buildGround() {
+   107→   107→    const g = new THREE.PlaneGeometry(WORLD_HALF * 2 + 400, WORLD_HALF * 2 + 400)
+   108→   108→    g.rotateX(-Math.PI / 2)
+   109→   109→    const m = new THREE.MeshLambertMaterial({ map: texDesert() })
+   110→   110→    const mesh = new THREE.Mesh(g, m)
+   111→   111→    mesh.receiveShadow = this.quality !== 'low'
+   112→   112→    this.group.add(mesh)
+   113→   113→  }
+   114→   114→
+   115→   115→  /* ================= roads ================= */
+   116→   116→  private roadGeo(x: number, z: number, len: number, vert: boolean, w = ROAD_W) {
+   117→   117→    const g = new THREE.PlaneGeometry(w, len)
+   118→   118→    const uv = g.attributes.uv as THREE.BufferAttribute
+   119→   119→    for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * (len / 16))
+   120→   120→    g.rotateX(-Math.PI / 2)
+   121→   121→    if (!vert) g.rotateY(Math.PI / 2)
+   122→   122→    g.translate(x, 0.06, z)
+   123→   123→    return g
+   124→   124→  }
+   125→   125→
+   126→   126→  private buildRoads() {
+   127→   127→    const geos: THREE.BufferGeometry[] = []
+   128→   128→    const addMini = (x: number, z: number, len: number, vert: boolean) =>
+   129→   129→      this.minimap.roads.push({ x, z, len, vert })
+   130→   130→    // city vertical roads (extend to city border)
+   131→   131→    for (const rx of V_ROADS) {
+   132→   132→      geos.push(this.roadGeo(rx, -600, 600, true))
+   133→   133→      addMini(rx, -600, 600, true)
+   134→   134→    }
+   135→   135→    // city horizontal roads
+   136→   136→    for (const rz of H_ROADS) {
+   137→   137→      geos.push(this.roadGeo(0, rz, 600, false))
+   138→   138→      addMini(0, rz, 600, false)
+   139→   139→    }
+   140→   140→    // highway: city south edge to town
+   141→   141→    geos.push(this.roadGeo(0, 150, 900, true))
+   142→   142→    addMini(0, 150, 900, true)
+   143→   143→    // town street
+   144→   144→    geos.push(this.roadGeo(0, TOWN.streetZ, 440, false))
+   145→   145→    addMini(0, TOWN.streetZ, 440, false)
+   146→   146→
+   147→   147→    const merged = this.mergeAll(geos)
+   148→   148→    const mat = new THREE.MeshLambertMaterial({ map: texAsphalt() })
+   149→   149→    mat.polygonOffset = true
+   150→   150→    mat.polygonOffsetFactor = -1
+   151→   151→    const mesh = new THREE.Mesh(merged, mat)
+   152→   152→    mesh.receiveShadow = this.quality !== 'low'
+   153→   153→    this.group.add(mesh)
+   154→   154→
+   155→   155→    // highway signs
+   156→   156→    this.addSign(8, -268, 0, '← لاس سومبرا')
+   157→   157→    this.addSign(8, 438, 0, '→ سنگ‌سرخ')
+   158→   158→
+   159→   159→    // world border colliders
+   160→   160→    const B = WORLD_HALF + 10
+   161→   161→    this.colliders.push(
+   162→   162→      { x: 0, z: B, hw: B + 200, hd: 12 }, { x: 0, z: -B, hw: B + 200, hd: 12 },
+   163→   163→      { x: B, z: 0, hw: 12, hd: B + 200 }, { x: -B, z: 0, hw: 12, hd: B + 200 },
+   164→   164→    )
+   165→   165→  }
+   166→   166→
+   167→   167→  private addSign(x: number, z: number, ry: number, text: string, w = 7, h = 2.2, bg = '#2a4a2c', fg = '#e8e0c0') {
+   168→   168→    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, h + 1.6, 6), new THREE.MeshLambertMaterial({ color: 0x4a4a4a }))
+   169→   169→    post.position.set(x, (h + 1.6) / 2, z)
+   170→   170→    this.group.add(post)
+   171→   171→    const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: texSign(text, 512, 128, bg, fg, 'bold 72px Vazirmatn, Tahoma'), side: THREE.DoubleSide }))
+   172→   172→    sign.position.set(x, h + 0.6, z)
+   173→   173→    sign.rotation.y = ry
+   174→   174→    this.group.add(sign)
+   175→   175→  }
+   176→   176→
+   177→   177→  /* ================= city ================= */
+   178→   178→  private buildingTints = ['#8d8578', '#7a6f63', '#9a8f7a', '#6f6a63', '#857066', '#5d5a55', '#7d8489', '#8a7a5f']
+   179→   179→  private buildingDefs: { x: number; z: number; w: number; d: number; h: number }[] = []
+   180→   180→  private windowsData: { m: THREE.Matrix4 }[] = []
+   181→   181→
+   182→   182→  private buildCity() {
+   183→   183→    const q = this.quality
+   184→   184→    // base slab
+   185→   185→    const base = new THREE.Mesh(
+   186→   186→      new THREE.PlaneGeometry(620, 620),
+   187→   187→      new THREE.MeshLambertMaterial({ map: texConcrete(), color: 0x77726a }),
+   188→   188→    )
+   189→   189→    base.rotation.x = -Math.PI / 2
+   190→   190→    base.position.set(0, 0.02, -600)
+   191→   191→    base.receiveShadow = q !== 'low'
+   192→   192→    this.group.add(base)
+   193→   193→
+   194→   194→    const bGeos: THREE.BufferGeometry[] = []
+   195→   195→    const special = new Map<string, string>() // "col,row" -> type
+   196→   196→    special.set('1,2', 'park')
+   197→   197→    special.set('3,1', 'parking')
+   198→   198→    special.set('4,2', 'parking')
+   199→   199→    special.set('2,3', 'police')
+   200→   200→
+   201→   201→    for (let ci = 0; ci < COLS.length; ci++) {
+   202→   202→      for (let ri = 0; ri < ROWS.length; ri++) {
+   203→   203→        const col = COLS[ci]
+   204→   204→        const row = ROWS[ri]
+   205→   205→        const key = `${ci},${ri}`
+   206→   206→        const type = special.get(key)
+   207→   207→        const uw = col.hw * 2 - 8
+   208→   208→        const ud = row.hd * 2 - 8
+   209→   209→        // sidewalk slab
+   210→   210→        const sw = new THREE.Mesh(new THREE.PlaneGeometry(uw + 10, ud + 10), new THREE.MeshLambertMaterial({ map: texSidewalk() }))
+   211→   211→        sw.rotation.x = -Math.PI / 2
+   212→   212→        sw.position.set(col.x, 0.04, row.z)
+   213→   213→        sw.receiveShadow = q !== 'low'
+   214→   214→        this.group.add(sw)
+   215→   215→
+   216→   216→        if (type === 'park') { this.buildPark(col.x, row.z, uw, ud); continue }
+   217→   217→        if (type === 'parking') {
+   218→   218→          const lot = new THREE.Mesh(new THREE.PlaneGeometry(uw, ud), new THREE.MeshLambertMaterial({ color: 0x3a3b3e }))
+   219→   219→          lot.rotation.x = -Math.PI / 2
+   220→   220→          lot.position.set(col.x, 0.05, row.z)
+   221→   221→          this.group.add(lot)
+   222→   222→          for (let i = 0; i < 4; i++) {
+   223→   223→            this.parkedSpots.push({ x: col.x - uw / 2 + 10, z: row.z - ud / 2 + 8 + i * (ud - 14) / 3, h: 0 })
+   224→   224→            this.parkedSpots.push({ x: col.x + uw / 2 - 10, z: row.z - ud / 2 + 8 + i * (ud - 14) / 3, h: Math.PI })
+   225→   225→          }
+   226→   226→          if (key === '3,1') this.parkedSpots.push({ x: col.x, z: row.z, h: Math.PI / 2 })
+   227→   227→          continue
+   228→   228→        }
+   229→   229→
+   230→   230→        // buildings
+   231→   231→        const downtown = Math.abs(col.x) <= 60 && row.z === -570
+   232→   232→        const placed: { x: number; z: number; w: number; d: number }[] = []
+   233→   233→        const n = col.hw > 40 ? randi(4, 6) : randi(2, 3)
+   234→   234→        for (let i = 0; i < n; i++) {
+   235→   235→          for (let t = 0; t < 10; t++) {
+   236→   236→            const w = rand(18, Math.min(42, uw * 0.55))
+   237→   237→            const d = rand(16, Math.min(40, ud * 0.55))
+   238→   238→            const x = col.x + rand(-uw / 2 + w / 2, uw / 2 - w / 2)
+   239→   239→            const z = row.z + rand(-ud / 2 + d / 2, ud / 2 - d / 2)
+   240→   240→            if (placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 + 4 && Math.abs(p.z - z) < (p.d + d) / 2 + 4)) continue
+   241→   241→            placed.push({ x, z, w, d })
+   242→   242→            const h = downtown ? rand(26, 60) : rand(9, 26)
+   243→   243→            const tint = new THREE.Color(pick(this.buildingTints))
+   244→   244→            bGeos.push(boxGeo(w, h, d, x, h / 2, z, 0, tint))
+   245→   245→            this.colliders.push({ x, z, hw: w / 2, hd: d / 2, h })
+   246→   246→            this.buildingDefs.push({ x, z, w, d, h })
+   247→   247→            this.addWindows(x, z, w, d, h)
+   248→   248→            if (type === 'police' && placed.length === 1) {
+   249→   249→              this.addSign(x, z + d / 2 + 0.3, 0, 'کلانتری — پلیس لاس سومبرا', 10, 1.6)
+   250→   250→            }
+   251→   251→            if (key === '3,2' && placed.length === 1) this.addSign(x, z + d / 2 + 0.3, 0, 'درمانگاه', 8, 1.6)
+   252→   252→            if (key === '4,0' && placed.length === 1) this.addSign(x, z + d / 2 + 0.3, 0, 'اداره پست', 8, 1.6)
+   253→   253→            if (key === '2,3' && placed.length === 2) this.addSign(x, z + d / 2 + 0.3, 0, 'مغازه اسلحه قبیله', 9, 1.6)
+   254→   254→            break
+   255→   255→          }
+   256→   256→        }
+   257→   257→      }
+   258→   258→    }
+   259→   259→
+   260→   260→    // merge buildings
+   261→   261→    const bMat = new THREE.MeshLambertMaterial({ map: texConcrete(), vertexColors: true })
+   262→   262→    const bMesh = new THREE.Mesh(this.mergeAll(bGeos), bMat)
+   263→   263→    bMesh.castShadow = q === 'high'
+   264→   264→    bMesh.receiveShadow = q !== 'low'
+   265→   265→    this.group.add(bMesh)
+   266→   266→    this.minimap.rects.push(...this.buildingDefs.map(b => ({ x: b.x, z: b.z, hw: b.w / 2, hd: b.d / 2, t: 'b' })))
+   267→   267→
+   268→   268→    this.buildWindows()
+   269→   269→    this.buildLamps()
+   270→   270→  }
+   271→   271→
+   272→   272→  private addWindows(x: number, z: number, w: number, d: number, h: number) {
+   273→   273→    const floors = Math.floor((h - 4) / 3.1)
+   274→   274→    if (floors < 1) return
+   275→   275→    const faces = [
+   276→   276→      { ry: 0, len: w }, { ry: Math.PI, len: w }, { ry: Math.PI / 2, len: d }, { ry: -Math.PI / 2, len: d },
+   277→   277→    ]
+   278→   278→    for (const f of faces) {
+   279→   279→      const cols = Math.floor((f.len - 3) / 2.9)
+   280→   280→      for (let fl = 0; fl < floors; fl++) {
+   281→   281→        for (let c = 0; c < cols; c++) {
+   282→   282→          if (Math.random() < 0.18) continue
+   283→   283→          const y = 2.4 + fl * 3.1
+   284→   284→          const off = -f.len / 2 + 2.2 + c * 2.9
+   285→   285→          const m = new THREE.Matrix4()
+   286→   286→          const pos = f.ry === 0 ? new THREE.Vector3(x + off, y, z + d / 2 + 0.07)
+   287→   287→            : f.ry === Math.PI ? new THREE.Vector3(x + off, y, z - d / 2 - 0.07)
+   288→   288→            : f.ry === Math.PI / 2 ? new THREE.Vector3(x + w / 2 + 0.07, y, z + off)
+   289→   289→            : new THREE.Vector3(x - w / 2 - 0.07, y, z + off)
+   290→   290→          m.compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, f.ry, 0)), new THREE.Vector3(1, 1, 1))
+   291→   291→          this.windowsData.push({ m })
+   292→   292→        }
+   293→   293→      }
+   294→   294→    }
+   295→   295→  }
+   296→   296→
+   297→   297→  private buildWindows() {
+   298→   298→    const n = Math.min(this.windowsData.length, 2400)
+   299→   299→    const geo = new THREE.PlaneGeometry(1.5, 1.9)
+   300→   300→    this.windowMat = new THREE.MeshBasicMaterial({ color: 0x1c222b })
+   301→   301→    const inst = new THREE.InstancedMesh(geo, this.windowMat, n)
+   302→   302→    const c = new THREE.Color()
+   303→   303→    for (let i = 0; i < n; i++) {
+   304→   304→      inst.setMatrixAt(i, this.windowsData[i].m)
+   305→   305→      const v = rand(0.75, 1.1)
+   306→   306→      inst.setColorAt(i, c.setRGB(v, v * rand(0.85, 1), v * rand(0.7, 0.95)))
+   307→   307→    }
+   308→   308→    inst.instanceMatrix.needsUpdate = true
+   309→   309→    this.group.add(inst)
+   310→   310→  }
+   311→   311→
+   312→   312→  private buildPark(cx: number, cz: number, uw: number, ud: number) {
+   313→   313→    // plaza with trees + fountain
+   314→   314→    const slab = new THREE.Mesh(new THREE.PlaneGeometry(uw, ud), new THREE.MeshLambertMaterial({ color: 0x6f7a58, map: texConcrete() }))
+   315→   315→    slab.rotation.x = -Math.PI / 2
+   316→   316→    slab.position.set(cx, 0.05, cz)
+   317→   317→    this.group.add(slab)
+   318→   318→    const geos: THREE.BufferGeometry[] = []
+   319→   319→    // fountain
+   320→   320→    geos.push(new THREE.CylinderGeometry(3.2, 3.6, 1, 12).translate(cx, 0.5, cz))
+   321→   321→    geos.push(new THREE.CylinderGeometry(0.5, 0.7, 2.4, 8).translate(cx, 1.7, cz))
+   322→   322→    this.colliders.push({ x: cx, z: cz, hw: 3.4, hd: 3.4, h: 1 })
+   323→   323→    // trees
+   324→   324→    const treeTrunk = new THREE.CylinderGeometry(0.22, 0.3, 3, 6)
+   325→   325→    const treeTop = new THREE.IcosahedronGeometry(1.9, 0)
+   326→   326→    for (let i = 0; i < 8; i++) {
+   327→   327→      const a = (i / 8) * Math.PI * 2 + rand(0, 0.5)
+   328→   328→      const r = Math.min(uw, ud) / 2 - 6
+   329→   329→      const tx = cx + Math.cos(a) * r
+   330→   330→      const tz = cz + Math.sin(a) * r
+   331→   331→      geos.push(treeTrunk.clone().translate(tx, 1.5, tz))
+   332→   332→      const top = treeTop.clone().translate(tx, 4, tz)
+   333→   333→      this.tintGeo(top, new THREE.Color('#4d6b35').offsetHSL(0, 0, rand(-0.05, 0.06)))
+   334→   334→      geos.push(top)
+   335→   335→      this.colliders.push({ x: tx, z: tz, hw: 0.5, hd: 0.5, h: 3 })
+   336→   336→    }
+   337→   337→    const merged = this.mergeAll(geos, '#5a4632')
+   338→   338→    const m = new THREE.MeshLambertMaterial({ vertexColors: true })
+   339→   339→    this.group.add(new THREE.Mesh(merged, m))
+   340→   340→  }
+   341→   341→
+   342→   342→  private tintGeo(g: THREE.BufferGeometry, c: THREE.Color) {
+   343→   343→    const n = g.attributes.position.count
+   344→   344→    const col = new Float32Array(n * 3)
+   345→   345→    for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b }
+   346→   346→    g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+   347→   347→  }
+   348→   348→
+   349→   349→  /* ================= street lamps ================= */
+   350→   350→  private buildLamps() {
+   351→   351→    const lampPts: { x: number; z: number; ry: number }[] = []
+   352→   352→    for (const rx of V_ROADS) {
+   353→   353→      for (let z = -860; z <= -340; z += 105) {
+   354→   354→        if (H_ROADS.some(h => Math.abs(h - z) < 12)) continue
+   355→   355→        const side = (Math.round(z / 105) % 2 === 0) ? 1 : -1
+   356→   356→        lampPts.push({ x: rx + side * 8.6, z, ry: side > 0 ? Math.PI : 0 })
+   357→   357→      }
+   358→   358→    }
+   359→   359→    for (const rz of H_ROADS) {
+   360→   360→      for (let x = -260; x <= 260; x += 104) {
+   361→   361→        if (V_ROADS.some(v => Math.abs(v - x) < 12)) continue
+   362→   362→        const side = (Math.round(x / 104) % 2 === 0) ? 1 : -1
+   363→   363→        lampPts.push({ x, z: rz + side * 8.6, ry: side > 0 ? -Math.PI / 2 : Math.PI / 2 })
+   364→   364→      }
+   365→   365→    }
+   366→   366→    // highway lamps
+   367→   367→    for (let z = -240; z <= 560; z += 100) {
+   368→   368→      const side = (Math.round(z / 100) % 2 === 0) ? 1 : -1
+   369→   369→      lampPts.push({ x: side * 8.6, z, ry: side > 0 ? Math.PI : 0 })
+   370→   370→    }
+   371→   371→    // town lamps
+   372→   372→    for (let x = -180; x <= 180; x += 72) {
+   373→   373→      lampPts.push({ x, z: TOWN.streetZ + (x % 144 === 0 ? 9 : -9), ry: x % 144 === 0 ? Math.PI : 0 })
+   374→   374→    }
+   375→   375→
+   376→   376→    const poleGeos: THREE.BufferGeometry[] = []
+   377→   377→    const headGeos: THREE.BufferGeometry[] = []
+   378→   378→    for (const p of lampPts) {
+   379→   379→      poleGeos.push(new THREE.CylinderGeometry(0.09, 0.13, 7, 6).translate(p.x, 3.5, p.z))
+   380→   380→      const armLen = 1.7
+   381→   381→      // arm points toward road center (opposite of side offset)
+   382→   382→      const dx = Math.sin(p.ry + Math.PI)
+   383→   383→      const dz = Math.cos(p.ry + Math.PI)
+   384→   384→      const hx = p.x + dx * armLen
+   385→   385→      const hz = p.z + dz * armLen
+   386→   386→      poleGeos.push(
+   387→   387→        new THREE.BoxGeometry(0.1, 0.1, armLen)
+   388→   388→          .rotateY(Math.atan2(dx, dz))
+   389→   389→          .translate(p.x + dx * armLen / 2, 6.9, p.z + dz * armLen / 2),
+   390→   390→      )
+   391→   391→      headGeos.push(new THREE.BoxGeometry(0.55, 0.22, 0.9).rotateY(Math.atan2(dx, dz) + Math.PI / 2).translate(hx, 6.8, hz))
+   392→   392→      this.lamps.push(new THREE.Vector3(hx, 6.6, hz))
+   393→   393→    }
+   394→   394→    const poleMat = new THREE.MeshLambertMaterial({ color: 0x2c2e33 })
+   395→   395→    this.group.add(new THREE.Mesh(this.mergeAll(poleGeos.filter(Boolean)), poleMat))
+   396→   396→    this.lampHeadMat = new THREE.MeshLambertMaterial({ color: 0x554d3a, emissive: 0xffd88a, emissiveIntensity: 0 })
+   397→   397→    this.group.add(new THREE.Mesh(this.mergeAll(headGeos), this.lampHeadMat))
+   398→   398→
+   399→   399→    // glow points
+   400→   400→    const gGeo = new THREE.BufferGeometry()
+   401→   401→    gGeo.setAttribute('position', new THREE.Float32BufferAttribute(this.lamps.flatMap(v => [v.x, v.y, v.z]), 3))
+   402→   402→    this.lampGlowMat = new THREE.PointsMaterial({
+   403→   403→      map: texGlow(), color: 0xffd88a, size: 5, transparent: true, opacity: 0,
+   404→   404→      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+   405→   405→    })
+   406→   406→    this.group.add(new THREE.Points(gGeo, this.lampGlowMat))
+   407→   407→
+   408→   408→    // light pools on ground
+   409→   409→    const poolGeo = new THREE.PlaneGeometry(11, 11)
+   410→   410→    poolGeo.rotateX(-Math.PI / 2)
+   411→   411→    const poolInst = new THREE.InstancedMesh(poolGeo, this.poolMat = new THREE.MeshBasicMaterial({
+   412→   412→      map: texGlow(), color: 0x5a4a28, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+   413→   413→    }), this.lamps.length)
+   414→   414→    const mm = new THREE.Matrix4()
+   415→   415→    this.lamps.forEach((v, i) => { mm.makeTranslation(v.x, 0.08, v.z); poolInst.setMatrixAt(i, mm) })
+   416→   416→    this.group.add(poolInst)
+   417→   417→  }
+   418→   418→
+   419→   419→  /* ================= western town ================= */
+   420→   420→  private buildTown() {
+   421→   421→    const q = this.quality
+   422→   422→    // dirt slab
+   423→   423→    const slab = new THREE.Mesh(new THREE.PlaneGeometry(480, 260), new THREE.MeshLambertMaterial({ color: 0xa8835a, map: texDesert() }))
+   424→   424→    slab.rotation.x = -Math.PI / 2
+   425→   425→    slab.position.set(0, 0.02, 600)
+   426→   426→    slab.receiveShadow = q !== 'low'
+   427→   427→    this.group.add(slab)
+   428→   428→
+   429→   429→    const wGeos: THREE.BufferGeometry[] = [] // wood colored
+   430→   430→    const aGeos: THREE.BufferGeometry[] = [] // adobe/plaster
+   431→   431→    const addBuilding = (x: number, z: number, w: number, d: number, h: number, wood = true, tint = '#936b3e') => {
+   432→   432→      const g = boxGeo(w, h, d, x, h / 2, z, 0, new THREE.Color(tint))
+   433→   433→      ;(wood ? wGeos : aGeos).push(g)
+   434→   434→      this.colliders.push({ x, z, hw: w / 2, hd: d / 2, h })
+   435→   435→      this.minimap.rects.push({ x, z, hw: w / 2, hd: d / 2, t: 'b' })
+   436→   436→    }
+   437→   437→    // flat roof lip
+   438→   438→    const roofG = boxGeo(0, 0, 0, 0, 0, 0)
+   439→   439→
+   440→   440→    // north row (front faces street at z=600)
+   441→   441→    addBuilding(-5, 572, 46, 26, 9, true, '#c09058')         // saloon
+   442→   442→    addBuilding(55, 574, 40, 22, 8, true, '#b0824c')         // hotel
+   443→   443→    addBuilding(100, 576, 30, 18, 5.5, true, '#a87c4c')
+   444→   444→    addBuilding(-110, 576, 30, 18, 5.5, true, '#a87c4c')
+   445→   445→    addBuilding(-65, 574, 40, 22, 6, true, '#b8885a')        // general store
+   446→   446→    // south row
+   447→   447→    addBuilding(-40, 627, 40, 24, 7, true, '#8a94a4')        // sheriff
+   448→   448→    addBuilding(30, 625, 30, 20, 6, true, '#b8884c')         // gunsmith
+   449→   449→    addBuilding(145, 627, 30, 18, 5.5, true, '#a87c4c')
+   450→   450→    // church (adobe)
+   451→   451→    addBuilding(-130, 629, 34, 26, 9, false, '#9a7a50')
+   452→   452→    aGeos.push(boxGeo(4, 14, 4, -130, 7, 619, 0, new THREE.Color('#9a7a50')))
+   453→   453→    aGeos.push(boxGeo(1, 3.4, 0.6, -130, 15.5, 619, 0, new THREE.Color('#d8c8a0')))
+   454→   454→    aGeos.push(boxGeo(2.6, 1, 0.6, -130, 14.4, 619, 0, new THREE.Color('#d8c8a0')))
+   455→   455→    this.colliders.push({ x: -130, z: 619, hw: 2.2, hd: 2.2, h: 14 })
+   456→   456→    // stable (open front): back + sides
+   457→   457→    wGeos.push(boxGeo(50, 6, 1, 95, 3, 638, 0, new THREE.Color('#96703e')))
+   458→   458→    wGeos.push(boxGeo(1, 6, 24, 71, 3, 626.5, 0, new THREE.Color('#96703e')))
+   459→   459→    wGeos.push(boxGeo(1, 6, 24, 119, 3, 626.5, 0, new THREE.Color('#96703e')))
+   460→   460→    wGeos.push(boxGeo(52, 0.8, 26, 95, 6.2, 626, 0, new THREE.Color('#6b4a28')))
+   461→   461→    this.colliders.push({ x: 95, z: 638, hw: 25, hd: 0.6, h: 6 })
+   462→   462→    this.colliders.push({ x: 71, z: 626.5, hw: 0.6, hd: 12, h: 6 })
+   463→   463→    this.colliders.push({ x: 119, z: 626.5, hw: 0.6, hd: 12, h: 6 })
+   464→   464→    this.minimap.rects.push({ x: 95, z: 627, hw: 25, hd: 12, t: 'b' })
+   465→   465→
+   466→   466→    void roofG
+   467→   467→    const wMat = new THREE.MeshLambertMaterial({ map: texWood(), vertexColors: true })
+   468→   468→    const wMesh = new THREE.Mesh(this.mergeAll(wGeos), wMat)
+   469→   469→    wMesh.castShadow = q === 'high'
+   470→   470→    wMesh.receiveShadow = q !== 'low'
+   471→   471→    this.group.add(wMesh)
+   472→   472→    const aMat = new THREE.MeshLambertMaterial({ map: texConcrete(), vertexColors: true })
+   473→   473→    this.group.add(new THREE.Mesh(this.mergeAll(aGeos), aMat))
+   474→   474→
+   475→   475→    // signs
+   476→   476→    this.addSign(-5, 586.2, 0, 'سالون سنگ‌سرخ', 12, 2.4, '#4a2418', '#ffd88a')
+   477→   477→    this.addSign(55, 586.2, 0, 'هتل')
+   478→   478→    this.addSign(-65, 586.2, 0, 'بازار عمومی', 9, 1.8)
+   479→   479→    this.addSign(-40, 614, Math.PI, 'کلانتری', 9, 1.8, '#2c3444', '#d8e0f0')
+   480→   480→    this.addSign(30, 614.2, Math.PI, 'مغازه اسلحه', 9, 1.8, '#33241a', '#e8c880')
+   481→   481→    this.addSign(95, 613.5, Math.PI, 'اصطبل', 8, 1.6)
+   482→   482→    this.addSign(-130, 615.5, Math.PI, 'کلیسا', 7, 1.5, '#4a3c28', '#f0e8d0')
+   483→   483→
+   484→   484→    // boardwalks
+   485→   485→    const bw1 = new THREE.Mesh(new THREE.PlaneGeometry(250, 8), new THREE.MeshLambertMaterial({ map: texWood(), color: 0xb09068 }))
+   486→   486→    bw1.rotation.x = -Math.PI / 2
+   487→   487→    bw1.position.set(-2, 0.07, 589)
+   488→   488→    this.group.add(bw1)
+   489→   489→    const bw2 = bw1.clone()
+   490→   490→    bw2.position.set(-2, 0.07, 611)
+   491→   491→    this.group.add(bw2)
+   492→   492→
+   493→   493→    // props: barrels, crates, hitching posts, wagon
+   494→   494→    const pGeos: THREE.BufferGeometry[] = []
+   495→   495→    for (let i = 0; i < 8; i++) {
+   496→   496→      const bx = rand(-30, 70), bz = pick([589, 611])
+   497→   497→      pGeos.push(new THREE.CylinderGeometry(0.42, 0.42, 1, 8).translate(bx, 0.5, bz))
+   498→   498→    }
+   499→   499→    // barrel tint ring is applied by wrapping cylinders below via unified default tint
+   500→   500→    const barrelStart = pGeos.length - 8
+   501→   501→    for (let i = 0; i < 6; i++) {
+   502→   502→      const bx = rand(-120, 120), bz = pick([588, 612])
+   503→   503→      pGeos.push(boxGeo(1.1, 1.1, 1.1, bx, 0.55, bz, rand(0, 1), new THREE.Color('#8a6a3c')))
+   504→   504→    }
+   505→   505→    // hitching rails
+   506→   506→    for (const hx of [-20, 40, -75]) {
+   507→   507→      pGeos.push(boxGeo(0.14, 1.1, 0.14, hx - 2.4, 0.55, 596, 0, new THREE.Color('#4a3520')))
+   508→   508→      pGeos.push(boxGeo(0.14, 1.1, 0.14, hx + 2.4, 0.55, 596, 0, new THREE.Color('#4a3520')))
+   509→   509→      pGeos.push(boxGeo(5.2, 0.12, 0.12, hx, 1.05, 596, 0, new THREE.Color('#4a3520')))
+   510→   510→    }
+   511→   511→    // wagon
+   512→   512→    pGeos.push(boxGeo(2.6, 1, 4.4, -85, 1.2, 604, 0.3, new THREE.Color('#6b4a28')))
+   513→   513→    for (const [wx, wz] of [[-86.4, 602.4], [-83.6, 602.4], [-86.4, 605.6], [-83.6, 605.6]] as const) {
+   514→   514→      pGeos.push(new THREE.CylinderGeometry(0.55, 0.55, 0.18, 10).rotateZ(Math.PI / 2).translate(wx, 0.55, wz))
+   515→   515→    }
+   516→   516→    this.colliders.push({ x: -85, z: 604, hw: 1.8, hd: 2.4, h: 2 })
+   517→   517→    // water tower
+   518→   518→    for (const [lx, lz] of [[166, 650], [174, 650], [166, 658], [174, 658]] as const) {
+   519→   519→      pGeos.push(new THREE.CylinderGeometry(0.22, 0.28, 9, 6).translate(lx, 4.5, lz))
+   520→   520→    }
+   521→   521→    pGeos.push(new THREE.CylinderGeometry(3.4, 3.1, 4.4, 10).translate(170, 11, 654))
+   522→   522→    pGeos.push(new THREE.ConeGeometry(3.7, 1.8, 10).translate(170, 14.1, 654))
+   523→   523→    // tint the un-tinted cylinders (barrels + tower) so they are not white
+   524→   524→    for (let i = barrelStart; i < pGeos.length; i++) {
+   525→   525→      if (!pGeos[i].attributes.color) {
+   526→   526→        const isTower = i >= pGeos.length - 6
+   527→   527→        this.tintGeo(pGeos[i], new THREE.Color(isTower ? '#8a6a4a' : '#7a4526'))
+   528→   528→      }
+   529→   529→    }
+   530→   530→    this.colliders.push({ x: 170, z: 654, hw: 3.4, hd: 3.4, h: 9 })
+   531→   531→    this.minimap.rects.push({ x: 170, z: 654, hw: 3.4, hd: 3.4, t: 'w' })
+   532→   532→
+   533→   533→    const pMesh = new THREE.Mesh(this.mergeAll(pGeos), new THREE.MeshLambertMaterial({ vertexColors: true }))
+   534→   534→    pMesh.castShadow = q === 'high'
+   535→   535→    this.group.add(pMesh)
+   536→   536→
+   537→   537→    this.horseSpots.push({ x: 95, z: 610 }, { x: 110, z: 610 })
+   538→   538→  }
+   539→   539→
+   540→   540→  /* ================= desert ================= */
+   541→   541→  private buildDesert() {
+   542→   542→    const q = this.quality
+   543→   543→    const nMul = q === 'low' ? 0.5 : q === 'med' ? 0.75 : 1
+   544→   544→
+   545→   545→    /* rocks (instanced) */
+   546→   546→    const rockGeo = new THREE.IcosahedronGeometry(1, 0)
+   547→   547→    const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true })
+   548→   548→    const bigN = Math.floor(46 * nMul), smallN = Math.floor(110 * nMul)
+   549→   549→    const rocks = new THREE.InstancedMesh(rockGeo, rockMat, bigN + smallN)
+   550→   550→    const m4 = new THREE.Matrix4()
+   551→   551→    const col = new THREE.Color()
+   552→   552→    let placed = 0
+   553→   553→    const scatter = (count: number, big: boolean) => {
+   554→   554→      for (let i = 0; i < count; i++) {
+   555→   555→        let x = 0, z = 0, ok = false
+   556→   556→        for (let t = 0; t < 20 && !ok; t++) {
+   557→   557→          x = rand(-WORLD_HALF, WORLD_HALF); z = rand(-WORLD_HALF, WORLD_HALF)
+   558→   558→          ok = !this.inCity(x, z, 30) && !this.inTown(x, z, 30) && !this.nearRoad(x, z, 14)
+   559→   559→        }
+   560→   560→        if (!ok) continue
+   561→   561→        const s = big ? rand(1.6, 4.2) : rand(0.4, 1.3)
+   562→   562→        m4.compose(
+   563→   563→          new THREE.Vector3(x, s * 0.35, z),
+   564→   564→          new THREE.Quaternion().setFromEuler(new THREE.Euler(rand(0, 3), rand(0, 6), rand(0, 3))),
+   565→   565→          new THREE.Vector3(s * rand(1, 1.6), s, s * rand(1, 1.6)),
+   566→   566→        )
+   567→   567→        rocks.setMatrixAt(placed, m4)
+   568→   568→        rocks.setColorAt(placed, col.setHSL(0.08, rand(0.15, 0.3), rand(0.32, 0.5)))
+   569→   569→        if (big) this.colliders.push({ x, z, hw: s * 1.1, hd: s * 1.1, h: s })
+   570→   570→        if (big) this.minimap.rects.push({ x, z, hw: s, hd: s, t: 'r' })
+   571→   571→        placed++
+   572→   572→      }
+   573→   573→    }
+   574→   574→    scatter(bigN, true)
+   575→   575→    scatter(smallN, false)
+   576→   576→    rocks.count = placed
+   577→   577→    rocks.castShadow = q === 'high'
+   578→   578→    rocks.receiveShadow = q !== 'low'
+   579→   579→    this.group.add(rocks)
+   580→   580→
+   581→   581→    /* cacti */
+   582→   582→    const cacGeos: THREE.BufferGeometry[] = []
+   583→   583→    cacGeos.push(new THREE.CylinderGeometry(0.26, 0.34, 2.8, 7).translate(0, 1.4, 0))
+   584→   584→    cacGeos.push(new THREE.CylinderGeometry(0.15, 0.18, 1.1, 6).rotateZ(Math.PI / 2).translate(0.55, 1.5, 0))
+   585→   585→    cacGeos.push(new THREE.CylinderGeometry(0.15, 0.15, 0.9, 6).translate(1.0, 2.1, 0))
+   586→   586→    cacGeos.push(new THREE.CylinderGeometry(0.14, 0.17, 0.9, 6).rotateZ(-Math.PI / 2).translate(-0.5, 1.1, 0))
+   587→   587→    cacGeos.push(new THREE.CylinderGeometry(0.13, 0.13, 0.7, 6).translate(-0.9, 1.65, 0))
+   588→   588→    const cacGeo = this.mergeAll(cacGeos)
+   589→   589→    this.tintGeo(cacGeo, new THREE.Color('#ffffff')) // tint via instance color
+   590→   590→    const cacti = new THREE.InstancedMesh(cacGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.floor(170 * nMul))
+   591→   591→    let cp = 0
+   592→   592→    for (let i = 0; i < cacti.count; i++) {
+   593→   593→      let x = 0, z = 0, ok = false
+   594→   594→      for (let t = 0; t < 15 && !ok; t++) {
+   595→   595→        x = rand(-WORLD_HALF, WORLD_HALF); z = rand(-WORLD_HALF, WORLD_HALF)
+   596→   596→        ok = !this.inCity(x, z, 20) && !this.inTown(x, z, 25) && !this.nearRoad(x, z, 11)
+   597→   597→      }
+   598→   598→      if (!ok) continue
+   599→   599→      const s = rand(0.7, 1.5)
+   600→   600→      m4.compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rand(0, 6), 0)), new THREE.Vector3(s, s * rand(0.85, 1.25), s))
+   601→   601→      cacti.setMatrixAt(cp, m4)
+   602→   602→      cacti.setColorAt(cp, col.setHSL(0.29, rand(0.3, 0.45), rand(0.22, 0.34)))
+   603→   603→      cp++
+   604→   604→    }
+   605→   605→    cacti.count = cp
+   606→   606→    cacti.castShadow = q === 'high'
+   607→   607→    this.group.add(cacti)
+   608→   608→
+   609→   609→    /* bushes */
+   610→   610→    const bushGeo = new THREE.IcosahedronGeometry(0.55, 0)
+   611→   611→    bushGeo.scale(1.3, 0.7, 1.3)
+   612→   612→    const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.floor(240 * nMul))
+   613→   613→    let bp = 0
+   614→   614→    for (let i = 0; i < bushes.count; i++) {
+   615→   615→      let x = 0, z = 0, ok = false
+   616→   616→      for (let t = 0; t < 10 && !ok; t++) {
+   617→   617→        x = rand(-WORLD_HALF, WORLD_HALF); z = rand(-WORLD_HALF, WORLD_HALF)
+   618→   618→        ok = !this.inCity(x, z, 10) && !this.inTown(x, z, 15) && !this.nearRoad(x, z, 9)
+   619→   619→      }
+   620→   620→      if (!ok) continue
+   621→   621→      const s = rand(0.6, 1.6)
+   622→   622→      m4.compose(new THREE.Vector3(x, 0.25 * s, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rand(0, 6), 0)), new THREE.Vector3(s, s, s))
+   623→   623→      bushes.setMatrixAt(bp, m4)
+   624→   624→      bushes.setColorAt(bp, col.setHSL(rand(0.12, 0.2), rand(0.25, 0.4), rand(0.22, 0.32)))
+   625→   625→      bp++
+   626→   626→    }
+   627→   627→    bushes.count = bp
+   628→   628→    this.group.add(bushes)
+   629→   629→
+   630→   630→    /* skyline mesas */
+   631→   631→    const mesaGeos: THREE.BufferGeometry[] = []
+   632→   632→    for (let i = 0; i < 10; i++) {
+   633→   633→      const a = rand(0, Math.PI * 2)
+   634→   634→      const r = rand(950, 1120)
+   635→   635→      const x = Math.cos(a) * r, z = Math.sin(a) * r
+   636→   636→      const w = rand(60, 160), h = rand(30, 80), d = rand(60, 160)
+   637→   637→      mesaGeos.push(boxGeo(w, h, d, x, h / 2 - 4, z, rand(0, 3), new THREE.Color('#8a6a4a').offsetHSL(0, 0, rand(-0.06, 0.06))))
+   638→   638→    }
+   639→   639→    this.group.add(new THREE.Mesh(this.mergeAll(mesaGeos), new THREE.MeshLambertMaterial({ vertexColors: true })))
+   640→   640→
+   641→   641→    /* bandit camps */
+   642→   642→    const campDefs: { x: number; z: number }[] = [
+   643→   643→      { x: -700, z: 180 }, { x: 650, z: 820 }, { x: 760, z: -80 },
+   644→   644→    ]
+   645→   645→    const campGeos: THREE.BufferGeometry[] = []
+   646→   646→    for (const cd of campDefs) {
+   647→   647→      const spawns: { x: number; z: number }[] = []
+   648→   648→      for (let i = 0; i < 4; i++) {
+   649→   649→        const a = (i / 4) * Math.PI * 2 + rand(0, 1)
+   650→   650→        spawns.push({ x: cd.x + Math.cos(a) * rand(6, 12), z: cd.z + Math.sin(a) * rand(6, 12) })
+   651→   651→      }
+   652→   652→      this.camps.push({ x: cd.x, z: cd.z, spawns })
+   653→   653→      this.minimap.camps.push({ x: cd.x, z: cd.z })
+   654→   654→      // tents
+   655→   655→      for (let i = 0; i < 3; i++) {
+   656→   656→        const a = (i / 3) * Math.PI * 2
+   657→   657→        const tx = cd.x + Math.cos(a) * 7, tz = cd.z + Math.sin(a) * 7
+   658→   658→        campGeos.push(new THREE.ConeGeometry(2.4, 2.8, 7).translate(tx, 1.4, tz))
+   659→   659→        this.colliders.push({ x: tx, z: tz, hw: 1.8, hd: 1.8, h: 2.4 })
+   660→   660→        this.minimap.rects.push({ x: tx, z: tz, hw: 2, hd: 2, t: 't' })
+   661→   661→      }
+   662→   662→      // campfire logs
+   663→   663→      for (let i = 0; i < 3; i++) {
+   664→   664→        campGeos.push(new THREE.CylinderGeometry(0.09, 0.11, 1.3, 5).rotateZ(Math.PI / 2.3).rotateY(i * 2.1).translate(cd.x, 0.25, cd.z))
+   665→   665→      }
+   666→   666→      // crates
+   667→   667→      campGeos.push(boxGeo(1, 1, 1, cd.x + 2.5, 0.5, cd.z + 1.5, 0.4, new THREE.Color('#7a5a30')))
+   668→   668→      this.firePoints.push(new THREE.Vector3(cd.x, 0.55, cd.z))
+   669→   669→    }
+   670→   670→    const campMesh = new THREE.Mesh(this.mergeAll(campGeos), new THREE.MeshLambertMaterial({ vertexColors: true }))
+   671→   671→    this.group.add(campMesh)
+   672→   672→
+   673→   673→    /* campfire lights */
+   674→   674→    if (q !== 'low') {
+   675→   675→      for (const fp of this.firePoints) {
+   676→   676→        const l = new THREE.PointLight(0xff7a2a, 2.2, 26, 1.6)
+   677→   677→        l.position.copy(fp).add(new THREE.Vector3(0, 1.2, 0))
+   678→   678→        this.group.add(l)
+   679→   679→        this.fireLights.push(l)
+   680→   680→        this.fireFlick.push(rand(0, 10))
+   681→   681→      }
+   682→   682→    }
+   683→   683→
+   684→   684→    /* wild horses & parked cars */
+   685→   685→    this.horseSpots.push(this.spots.starterHorse, { x: 350, z: 260 }, { x: -480, z: -60 })
+   686→   686→    this.parkedSpots.push(
+   687→   687→      this.spots.starterCar, this.spots.extraCar,
+   688→   688→      { x: -114, z: -700, h: Math.PI / 2 }, { x: 126, z: -520, h: -Math.PI / 2 },
+   689→   689→      { x: -6, z: -350, h: 0 }, { x: -240 - 6, z: -800, h: Math.PI / 2 },
+   690→   690→      { x: 186, z: -440, h: 0 }, { x: -186, z: -620, h: Math.PI },
+   691→   691→      { x: 66, z: -800, h: 0 }, { x: -66, z: -420, h: Math.PI },
+   692→   692→    )
+   693→   693→    // police cars at station
+   694→   694→    this.parkedSpots.push({ x: 60 + 14, z: -570 + 22, h: Math.PI / 2, police: true }, { x: 60 + 14, z: -570 + 32, h: Math.PI / 2, police: true })
+   695→   695→  }
+   696→   696→
+   697→   697→  /* ================= traffic graph ================= */
+   698→   698→  private buildGraph() {
+   699→   699→    const nodes: GraphNode[] = []
+   700→   700→    const idx = (x: number, z: number) => {
+   701→   701→      const i = nodes.findIndex(n => n.x === x && n.z === z)
+   702→   702→      if (i >= 0) return i
+   703→   703→      nodes.push({ x, z })
+   704→   704→      return nodes.length - 1
+   705→   705→    }
+   706→   706→    const edges: [number, number][] = []
+   707→   707→    const link = (a: number, b: number) => { edges.push([a, b]) }
+   708→   708→    // grid
+   709→   709→    const gridIdx: number[][] = []
+   710→   710→    for (let ri = 0; ri < H_ROADS.length; ri++) {
+   711→   711→      gridIdx[ri] = []
+   712→   712→      for (let ci = 0; ci < V_ROADS.length; ci++) {
+   713→   713→        gridIdx[ri][ci] = idx(V_ROADS[ci], H_ROADS[ri])
+   714→   714→      }
+   715→   715→    }
+   716→   716→    for (let ri = 0; ri < H_ROADS.length; ri++) {
+   717→   717→      for (let ci = 0; ci < V_ROADS.length; ci++) {
+   718→   718→        if (ci < V_ROADS.length - 1) link(gridIdx[ri][ci], gridIdx[ri][ci + 1])
+   719→   719→        if (ri < H_ROADS.length - 1) link(gridIdx[ri][ci], gridIdx[ri + 1][ci])
+   720→   720→      }
+   721→   721→    }
+   722→   722→    // highway chain south of city
+   723→   723→    const hwyZ = [-300, -160, 0, 160, 320, 480, 600]
+   724→   724→    let prev = idx(0, -300)
+   725→   725→    for (let i = 1; i < hwyZ.length; i++) {
+   726→   726→      const n = idx(0, hwyZ[i])
+   727→   727→      link(prev, n)
+   728→   728→      prev = n
+   729→   729→    }
+   730→   730→    // town street
+   731→   731→    const t1 = idx(-200, 600), t2 = idx(0, 600), t3 = idx(200, 600)
+   732→   732→    link(t1, t2); link(t2, t3)
+   733→   733→
+   734→   734→    // adjacency
+   735→   735→    const adj: number[][] = nodes.map(() => [])
+   736→   736→    for (const [a, b] of edges) { adj[a].push(b); adj[b].push(a) }
+   737→   737→    this.graph = { nodes, adj }
+   738→   738→  }
+   739→   739→
+   740→   740→  /* ================= per-frame ================= */
+   741→   741→  private tmpV = new THREE.Vector3()
+   742→   742→  update(night: number, dt: number) {
+   743→   743→    // windows: dark by day, warm glow by night
+   744→   744→    this.windowMat.color.setRGB(
+   745→   745→      0.11 + night * 1.15, 0.13 + night * 0.85, 0.17 + night * 0.38,
+   746→   746→    )
+   747→   747→    this.lampHeadMat.emissiveIntensity = night * 2.4
+   748→   748→    this.lampGlowMat.opacity = night * 0.85
+   749→   749→    this.poolMat.opacity = night * 0.5
+   750→   750→    // fire flicker
+   751→   751→    for (let i = 0; i < this.fireLights.length; i++) {
+   752→   752→      this.fireFlick[i] += dt * rand(6, 12)
+   753→   753→      this.fireLights[i].intensity = 1.8 + Math.sin(this.fireFlick[i]) * 0.5 + Math.sin(this.fireFlick[i] * 2.7) * 0.3
+   754→   754→    }
+   755→   755→    void this.tmpV
+   756→   756→    void clamp
+   757→   757→  }
+   758→   758→}
+   759→   759→

@@ -621,7 +621,7 @@ export class Hud {
     no.onclick = () => this.cbs.onDecline()
   }
 
-  showShop(owned: boolean[], prices: { pistol: number; rifle: number }, canBuyAmmo: boolean, ammoLabel: string) {
+  showShop(owned: boolean[], prices: { pistol: number; rifle: number; shotgun: number; smg: number }, canBuyAmmo: boolean, ammoLabel: string) {
     const o = this.overlay('shop')
     o.style.display = ''
     const card = this.el('div', 'panel card', o)
@@ -646,6 +646,8 @@ export class Hud {
     }
     if (!owned[1]) mkRow('کلت برنی', `${faNum(prices.pistol)} دلار`, () => this.cbs.onBuyWeapon(1), false)
     if (!owned[2]) mkRow('شاهین ۷۰۸ (تفنگ)', `${faNum(prices.rifle)} دلار`, () => this.cbs.onBuyWeapon(2), false)
+    if (!owned[3]) mkRow('تفنگ شکاری', `${faNum(prices.shotgun)} دلار`, () => this.cbs.onBuyWeapon(3), false)
+    if (!owned[4]) mkRow('مسلسل رگبار', `${faNum(prices.smg)} دلار`, () => this.cbs.onBuyWeapon(4), false)
     mkRow(ammoLabel, '', () => this.cbs.onBuyAmmo(), false)
     mkRow('بسته سلامتی (کامل)', '۳۰ دلار', () => this.cbs.onBuyHealth(), false)
     const row = this.el('div', 'mrow', card)

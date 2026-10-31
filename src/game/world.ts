@@ -21,7 +21,7 @@ const ROWS = [
 ]
 
 export const TOWN = { x0: -220, x1: 220, z0: 500, z1: 700, streetZ: 600 }
-export const WORLD_HALF = 1150
+export const WORLD_HALF = 1600
 
 export interface Camp { x: number; z: number; spawns: { x: number; z: number }[] }
 
@@ -48,7 +48,18 @@ export class World {
       race: { x: 60, z: -748 },
       duel: { x: -5, z: 596 },
       escape: { x: -95, z: -568 },
+      farmraid: { x: 584, z: -474 },
+      convoy: { x: 616, z: -524 },
+      treasure: { x: -118, z: 612 },
     },
+    farm: { x: 600, z: -500 },
+    cityDepot: { x: -180, z: -460 },
+    treasureSpot: { x: 462, z: 342 },
+    gasStations: [{ x: 22, z: -60 }, { x: -22, z: 380 }],
+    farmRaiders: [
+      { x: 588, z: -512 }, { x: 612, z: -530 }, { x: 632, z: -494 },
+      { x: 574, z: -486 }, { x: 604, z: -476 }, { x: 640, z: -520 },
+    ],
     deliveryDrop: { x: -8, z: 590 },
     bountyCamp: 1,
     raceCp: [
@@ -65,12 +76,19 @@ export class World {
   fireLights: THREE.PointLight[] = []
   private fireFlick: number[] = []
 
+  radioBeacon!: THREE.Sprite
+  private blink = 0
+
   constructor(private quality: 'low' | 'med' | 'high') {
     this.buildGround()
     this.buildRoads()
     this.buildCity()
     this.buildTown()
     this.buildDesert()
+    this.buildGasStations()
+    this.buildFarm()
+    this.buildLake()
+    this.buildRadioTower()
     this.buildGraph()
   }
 
@@ -545,7 +563,7 @@ export class World {
     /* rocks (instanced) */
     const rockGeo = new THREE.IcosahedronGeometry(1, 0)
     const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true })
-    const bigN = Math.floor(46 * nMul), smallN = Math.floor(110 * nMul)
+    const bigN = Math.floor(70 * nMul), smallN = Math.floor(170 * nMul)
     const rocks = new THREE.InstancedMesh(rockGeo, rockMat, bigN + smallN)
     const m4 = new THREE.Matrix4()
     const col = new THREE.Color()
@@ -587,7 +605,7 @@ export class World {
     cacGeos.push(new THREE.CylinderGeometry(0.13, 0.13, 0.7, 6).translate(-0.9, 1.65, 0))
     const cacGeo = this.mergeAll(cacGeos)
     this.tintGeo(cacGeo, new THREE.Color('#ffffff')) // tint via instance color
-    const cacti = new THREE.InstancedMesh(cacGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.floor(170 * nMul))
+    const cacti = new THREE.InstancedMesh(cacGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.floor(260 * nMul))
     let cp = 0
     for (let i = 0; i < cacti.count; i++) {
       let x = 0, z = 0, ok = false
@@ -609,7 +627,7 @@ export class World {
     /* bushes */
     const bushGeo = new THREE.IcosahedronGeometry(0.55, 0)
     bushGeo.scale(1.3, 0.7, 1.3)
-    const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.floor(240 * nMul))
+    const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), Math.floor(360 * nMul))
     let bp = 0
     for (let i = 0; i < bushes.count; i++) {
       let x = 0, z = 0, ok = false
@@ -629,18 +647,19 @@ export class World {
 
     /* skyline mesas */
     const mesaGeos: THREE.BufferGeometry[] = []
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 18; i++) {
       const a = rand(0, Math.PI * 2)
-      const r = rand(950, 1120)
+      const r = rand(980, 1540)
       const x = Math.cos(a) * r, z = Math.sin(a) * r
-      const w = rand(60, 160), h = rand(30, 80), d = rand(60, 160)
+      const w = rand(70, 200), h = rand(30, 95), d = rand(70, 200)
       mesaGeos.push(boxGeo(w, h, d, x, h / 2 - 4, z, rand(0, 3), new THREE.Color('#8a6a4a').offsetHSL(0, 0, rand(-0.06, 0.06))))
+      if (i % 3 === 0) this.minimap.rects.push({ x, z, hw: w / 2, hd: d / 2, t: 'r' })
     }
     this.group.add(new THREE.Mesh(this.mergeAll(mesaGeos), new THREE.MeshLambertMaterial({ vertexColors: true })))
 
     /* bandit camps */
     const campDefs: { x: number; z: number }[] = [
-      { x: -700, z: 180 }, { x: 650, z: 820 }, { x: 760, z: -80 },
+      { x: -700, z: 180 }, { x: 650, z: 820 }, { x: 760, z: -80 }, { x: -350, z: -1050 },
     ]
     const campGeos: THREE.BufferGeometry[] = []
     for (const cd of campDefs) {
@@ -682,16 +701,167 @@ export class World {
     }
 
     /* wild horses & parked cars */
-    this.horseSpots.push(this.spots.starterHorse, { x: 350, z: 260 }, { x: -480, z: -60 })
+    this.horseSpots.push(this.spots.starterHorse, { x: 350, z: 260 }, { x: -480, z: -60 }, { x: 520, z: -560 }, { x: -560, z: 690 })
     this.parkedSpots.push(
       this.spots.starterCar, this.spots.extraCar,
       { x: -114, z: -700, h: Math.PI / 2 }, { x: 126, z: -520, h: -Math.PI / 2 },
       { x: -6, z: -350, h: 0 }, { x: -240 - 6, z: -800, h: Math.PI / 2 },
       { x: 186, z: -440, h: 0 }, { x: -186, z: -620, h: Math.PI },
       { x: 66, z: -800, h: 0 }, { x: -66, z: -420, h: Math.PI },
+      { x: 10, z: -80, h: 0 }, { x: -34, z: 372, h: Math.PI },
+      { x: 560, z: -490, h: Math.PI / 2 }, { x: -160, z: -478, h: 0 },
+      { x: -640, z: 640, h: Math.PI / 2 }, { x: 420, z: 330, h: -Math.PI / 2 },
     )
     // police cars at station
     this.parkedSpots.push({ x: 60 + 14, z: -570 + 22, h: Math.PI / 2, police: true }, { x: 60 + 14, z: -570 + 32, h: Math.PI / 2, police: true })
+  }
+
+  /* ================= gas stations (repair & rest stop) ================= */
+  private buildGasStations() {
+    for (const gs of this.spots.gasStations) {
+      const side = gs.x >= 0 ? 1 : -1
+      const gGeos: THREE.BufferGeometry[] = []
+      // shop building
+      gGeos.push(boxGeo(12, 4.5, 8, gs.x + side * 26, 2.25, gs.z, 0, new THREE.Color('#c8c2b4')))
+      this.colliders.push({ x: gs.x + side * 26, z: gs.z, hw: 6, hd: 4, h: 4.5 })
+      this.minimap.rects.push({ x: gs.x + side * 26, z: gs.z, hw: 6, hd: 4, t: 'b' })
+      // canopy pillars + roof
+      for (const [px, pz] of [[-5, -4], [5, -4], [-5, 4], [5, 4]] as const) {
+        const g = new THREE.CylinderGeometry(0.28, 0.28, 5, 8).translate(gs.x + px, 2.5, gs.z + pz)
+        this.tintGeo(g, new THREE.Color('#9a9a9a'))
+        gGeos.push(g)
+      }
+      gGeos.push(boxGeo(16, 0.7, 14, gs.x, 5.3, gs.z, 0, new THREE.Color('#b03a2a')))
+      gGeos.push(boxGeo(16, 0.5, 2.2, gs.x, 4.6, gs.z + 7.6, 0, new THREE.Color('#b03a2a')))
+      // pumps
+      for (const px of [-2.5, 2.5]) {
+        gGeos.push(boxGeo(1.1, 1.6, 0.8, gs.x + px, 0.8, gs.z, 0, new THREE.Color('#8a2f22')))
+        this.colliders.push({ x: gs.x + px, z: gs.z, hw: 0.7, hd: 0.55, h: 1.6 })
+      }
+      const mesh = new THREE.Mesh(this.mergeAll(gGeos), new THREE.MeshLambertMaterial({ vertexColors: true }))
+      mesh.castShadow = this.quality === 'high'
+      this.group.add(mesh)
+      this.addSign(gs.x + side * 8, gs.z + 12.5, side > 0 ? Math.PI : 0, 'گازولین — تعمیرگاه', 10, 1.9, '#7a1f14', '#ffd88a')
+    }
+  }
+
+  /* ================= farm ================= */
+  private buildFarm() {
+    const f = this.spots.farm
+    const gGeos: THREE.BufferGeometry[] = []
+    // barn
+    gGeos.push(boxGeo(18, 8, 12, f.x, 4, f.z - 18, 0, new THREE.Color('#8a3a2a')))
+    gGeos.push(boxGeo(19, 1, 13, f.x, 8.4, f.z - 18, 0, new THREE.Color('#5a2418')))
+    this.colliders.push({ x: f.x, z: f.z - 18, hw: 9, hd: 6, h: 8 })
+    this.minimap.rects.push({ x: f.x, z: f.z - 18, hw: 9, hd: 6, t: 'b' })
+    // silo
+    const silo = new THREE.CylinderGeometry(3, 3.2, 13, 10).translate(f.x + 16, 6.5, f.z - 24)
+    this.tintGeo(silo, new THREE.Color('#b0aa9e'))
+    gGeos.push(silo)
+    const siloTop = new THREE.ConeGeometry(3.5, 2.6, 10).translate(f.x + 16, 14.2, f.z - 24)
+    this.tintGeo(siloTop, new THREE.Color('#7a6a50'))
+    gGeos.push(siloTop)
+    this.colliders.push({ x: f.x + 16, z: f.z - 24, hw: 3.2, hd: 3.2, h: 13 })
+    this.minimap.rects.push({ x: f.x + 16, z: f.z - 24, hw: 3.2, hd: 3.2, t: 'w' })
+    // windmill
+    const mast = new THREE.CylinderGeometry(0.25, 0.5, 12, 6).translate(f.x - 18, 6, f.z + 8)
+    this.tintGeo(mast, new THREE.Color('#8a8478'))
+    gGeos.push(mast)
+    gGeos.push(boxGeo(4.4, 0.5, 0.15, f.x - 18, 11.6, f.z + 8, 0.5, new THREE.Color('#7a7468')))
+    gGeos.push(boxGeo(4.4, 0.5, 0.15, f.x - 18, 11.6, f.z + 8, -0.5, new THREE.Color('#7a7468')))
+    this.colliders.push({ x: f.x - 18, z: f.z + 8, hw: 0.6, hd: 0.6, h: 12 })
+    // hay bales
+    for (let i = 0; i < 5; i++) {
+      const hay = new THREE.CylinderGeometry(0.8, 0.8, 1.4, 9).rotateZ(Math.PI / 2).translate(f.x + rand(-10, 10), 0.8, f.z + rand(2, 12))
+      this.tintGeo(hay, new THREE.Color('#c8a850'))
+      gGeos.push(hay)
+    }
+    // trough + fence posts around yard
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2
+      gGeos.push(boxGeo(0.16, 1.1, 0.16, f.x + Math.cos(a) * 30, 0.55, f.z + Math.sin(a) * 30, 0, new THREE.Color('#5a4028')))
+    }
+    const mesh = new THREE.Mesh(this.mergeAll(gGeos), new THREE.MeshLambertMaterial({ vertexColors: true }))
+    mesh.castShadow = this.quality === 'high'
+    this.group.add(mesh)
+    // plowed field
+    const field = new THREE.Mesh(new THREE.PlaneGeometry(34, 22), new THREE.MeshLambertMaterial({ color: 0x5a4632, map: texDesert() }))
+    field.rotation.x = -Math.PI / 2
+    field.position.set(f.x + 4, 0.04, f.z + 26)
+    this.group.add(field)
+    this.addSign(f.x - 6, f.z - 6, 0, 'مزرعه دلگون', 9, 1.8, '#4a3a20', '#e8d8a0')
+    this.firePoints.push(new THREE.Vector3(f.x - 4, 0.55, f.z - 4))
+    if (this.quality !== 'low') {
+      const l = new THREE.PointLight(0xff7a2a, 2.2, 26, 1.6)
+      l.position.set(f.x - 4, 1.6, f.z - 4)
+      this.group.add(l)
+      this.fireLights.push(l)
+      this.fireFlick.push(rand(0, 10))
+    }
+  }
+
+  /* ================= lake & pier ================= */
+  private buildLake() {
+    const cx = -650, cz = 750
+    const water = new THREE.Mesh(
+      new THREE.CircleGeometry(130, 26),
+      new THREE.MeshLambertMaterial({ color: 0x2e6a8a, transparent: true, opacity: 0.85 }),
+    )
+    water.rotation.x = -Math.PI / 2
+    water.position.set(cx, 0.05, cz)
+    this.group.add(water)
+    // pier
+    const gGeos: THREE.BufferGeometry[] = []
+    for (let i = 0; i < 8; i++) {
+      gGeos.push(boxGeo(3.4, 0.25, 2.2, cx + 62, 0.7, 690 + i * 8.6, 0, new THREE.Color('#6b4a28')))
+    }
+    for (let i = 0; i < 8; i += 2) {
+      gGeos.push(boxGeo(0.22, 2, 0.22, cx + 60.6, 0.5, 690 + i * 8.6 + 4, 0, new THREE.Color('#4a3520')))
+      gGeos.push(boxGeo(0.22, 2, 0.22, cx + 63.4, 0.5, 690 + i * 8.6 + 4, 0, new THREE.Color('#4a3520')))
+    }
+    // rowboat
+    gGeos.push(boxGeo(1.8, 0.7, 5, cx - 40, 0.55, cz - 20, 0.4, new THREE.Color('#7a5a34')))
+    gGeos.push(boxGeo(1.4, 0.5, 4.2, cx - 40, 0.85, cz - 20, 0.4, new THREE.Color('#5a4024')))
+    // reeds
+    for (let i = 0; i < 26; i++) {
+      const a = rand(0, Math.PI * 2)
+      const r = 128 + rand(-4, 4)
+      const reed = new THREE.ConeGeometry(0.14, rand(1.2, 2.2), 5).translate(cx + Math.cos(a) * r, 0.7, cz + Math.sin(a) * r)
+      this.tintGeo(reed, new THREE.Color('#5a7a3a'))
+      gGeos.push(reed)
+    }
+    const mesh = new THREE.Mesh(this.mergeAll(gGeos), new THREE.MeshLambertMaterial({ vertexColors: true }))
+    mesh.castShadow = this.quality === 'high'
+    this.group.add(mesh)
+    this.addSign(cx + 66, 682, Math.PI, 'دریاچه آبی', 8, 1.7, '#1e3a4a', '#c8e8f0')
+  }
+
+  /* ================= radio tower ================= */
+  private buildRadioTower() {
+    const t = this.spots.treasureSpot
+    const gGeos: THREE.BufferGeometry[] = []
+    for (let i = 0; i < 3; i++) {
+      const h = 14, y = i * h + h / 2
+      const r0 = 2.2 - i * 0.55, r1 = 2.2 - (i + 1) * 0.55
+      gGeos.push(new THREE.CylinderGeometry(r1, r0, h, 4, 1, true).translate(t.x, y, t.z))
+      gGeos.push(boxGeo(0.14, 0.14, 0.14, t.x, y, t.z))
+    }
+    gGeos.push(new THREE.CylinderGeometry(0.1, 0.1, 4, 5).translate(t.x, 43, t.z))
+    const mesh = new THREE.Mesh(this.mergeAll(gGeos, '#8a8f96'), new THREE.MeshLambertMaterial({ vertexColors: true }))
+    mesh.castShadow = this.quality === 'high'
+    this.group.add(mesh)
+    this.colliders.push({ x: t.x, z: t.z, hw: 2.4, hd: 2.4, h: 42 })
+    this.minimap.rects.push({ x: t.x, z: t.z, hw: 2.4, hd: 2.4, t: 'w' })
+    // blinking beacon
+    this.radioBeacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: texGlow(), color: 0xff3030, transparent: true, opacity: 0.9, depthWrite: false }))
+    this.radioBeacon.scale.setScalar(6)
+    this.radioBeacon.position.set(t.x, 45.5, t.z)
+    this.group.add(this.radioBeacon)
+    // small hut at base
+    const hut = boxGeo(6, 3, 5, t.x + 8, 1.5, t.z + 6, 0, new THREE.Color('#9a948a'))
+    const hm = new THREE.Mesh(hut, new THREE.MeshLambertMaterial({ vertexColors: true }))
+    this.group.add(hm)
+    this.colliders.push({ x: t.x + 8, z: t.z + 6, hw: 3, hd: 2.5, h: 3 })
   }
 
   /* ================= traffic graph ================= */
@@ -747,6 +917,9 @@ export class World {
     this.lampHeadMat.emissiveIntensity = night * 2.4
     this.lampGlowMat.opacity = night * 0.85
     this.poolMat.opacity = night * 0.5
+    // radio beacon blink
+    this.blink += dt
+    ;(this.radioBeacon.material as THREE.SpriteMaterial).opacity = (Math.sin(this.blink * 2.2) > 0 ? 0.9 : 0.12)
     // fire flicker
     for (let i = 0; i < this.fireLights.length; i++) {
       this.fireFlick[i] += dt * rand(6, 12)

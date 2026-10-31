@@ -454,7 +454,7 @@ const TOWN = {
     z1: 700,
     streetZ: 600
 };
-const WORLD_HALF = 1150;
+const WORLD_HALF = 1600;
 class World {
     quality;
     group;
@@ -474,6 +474,8 @@ class World {
     poolMat;
     fireLights;
     fireFlick;
+    radioBeacon;
+    blink;
     constructor(quality){
         this.quality = quality;
         this.group = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Group"]();
@@ -545,8 +547,68 @@ class World {
                 escape: {
                     x: -95,
                     z: -568
+                },
+                farmraid: {
+                    x: 584,
+                    z: -474
+                },
+                convoy: {
+                    x: 616,
+                    z: -524
+                },
+                treasure: {
+                    x: -118,
+                    z: 612
                 }
             },
+            farm: {
+                x: 600,
+                z: -500
+            },
+            cityDepot: {
+                x: -180,
+                z: -460
+            },
+            treasureSpot: {
+                x: 462,
+                z: 342
+            },
+            gasStations: [
+                {
+                    x: 22,
+                    z: -60
+                },
+                {
+                    x: -22,
+                    z: 380
+                }
+            ],
+            farmRaiders: [
+                {
+                    x: 588,
+                    z: -512
+                },
+                {
+                    x: 612,
+                    z: -530
+                },
+                {
+                    x: 632,
+                    z: -494
+                },
+                {
+                    x: 574,
+                    z: -486
+                },
+                {
+                    x: 604,
+                    z: -476
+                },
+                {
+                    x: 640,
+                    z: -520
+                }
+            ],
             deliveryDrop: {
                 x: -8,
                 z: 590
@@ -593,6 +655,7 @@ class World {
         };
         this.fireLights = [];
         this.fireFlick = [];
+        this.blink = 0;
         /* ================= city ================= */ this.buildingTints = [
             '#8d8578',
             '#7a6f63',
@@ -611,6 +674,10 @@ class World {
         this.buildCity();
         this.buildTown();
         this.buildDesert();
+        this.buildGasStations();
+        this.buildFarm();
+        this.buildLake();
+        this.buildRadioTower();
         this.buildGraph();
     }
     /** merge geometries with normalized attributes (index + color) */ mergeAll(geos, defaultColor = '#ffffff') {
@@ -1323,7 +1390,7 @@ class World {
         const rockMat = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
             vertexColors: true
         });
-        const bigN = Math.floor(46 * nMul), smallN = Math.floor(110 * nMul);
+        const bigN = Math.floor(70 * nMul), smallN = Math.floor(170 * nMul);
         const rocks = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["InstancedMesh"](rockGeo, rockMat, bigN + smallN);
         const m4 = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Matrix4"]();
         const col = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]();
@@ -1374,7 +1441,7 @@ class World {
         this.tintGeo(cacGeo, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#ffffff')); // tint via instance color
         const cacti = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["InstancedMesh"](cacGeo, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
             color: 0xffffff
-        }), Math.floor(170 * nMul));
+        }), Math.floor(260 * nMul));
         let cp = 0;
         for(let i = 0; i < cacti.count; i++){
             let x = 0, z = 0, ok = false;
@@ -1397,7 +1464,7 @@ class World {
         bushGeo.scale(1.3, 0.7, 1.3);
         const bushes = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["InstancedMesh"](bushGeo, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
             color: 0xffffff
-        }), Math.floor(240 * nMul));
+        }), Math.floor(360 * nMul));
         let bp = 0;
         for(let i = 0; i < bushes.count; i++){
             let x = 0, z = 0, ok = false;
@@ -1416,12 +1483,19 @@ class World {
         bushes.count = bp;
         this.group.add(bushes);
         /* skyline mesas */ const mesaGeos = [];
-        for(let i = 0; i < 10; i++){
+        for(let i = 0; i < 18; i++){
             const a = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(0, Math.PI * 2);
-            const r = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(950, 1120);
+            const r = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(980, 1540);
             const x = Math.cos(a) * r, z = Math.sin(a) * r;
-            const w = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(60, 160), h = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(30, 80), d = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(60, 160);
+            const w = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(70, 200), h = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(30, 95), d = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(70, 200);
             mesaGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(w, h, d, x, h / 2 - 4, z, (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(0, 3), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#8a6a4a').offsetHSL(0, 0, (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(-0.06, 0.06))));
+            if (i % 3 === 0) this.minimap.rects.push({
+                x,
+                z,
+                hw: w / 2,
+                hd: d / 2,
+                t: 'r'
+            });
         }
         this.group.add(new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](this.mergeAll(mesaGeos), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
             vertexColors: true
@@ -1438,6 +1512,10 @@ class World {
             {
                 x: 760,
                 z: -80
+            },
+            {
+                x: -350,
+                z: -1050
             }
         ];
         const campGeos = [];
@@ -1506,6 +1584,12 @@ class World {
         }, {
             x: -480,
             z: -60
+        }, {
+            x: 520,
+            z: -560
+        }, {
+            x: -560,
+            z: 690
         });
         this.parkedSpots.push(this.spots.starterCar, this.spots.extraCar, {
             x: -114,
@@ -1539,6 +1623,30 @@ class World {
             x: -66,
             z: -420,
             h: Math.PI
+        }, {
+            x: 10,
+            z: -80,
+            h: 0
+        }, {
+            x: -34,
+            z: 372,
+            h: Math.PI
+        }, {
+            x: 560,
+            z: -490,
+            h: Math.PI / 2
+        }, {
+            x: -160,
+            z: -478,
+            h: 0
+        }, {
+            x: -640,
+            z: 640,
+            h: Math.PI / 2
+        }, {
+            x: 420,
+            z: 330,
+            h: -Math.PI / 2
         });
         // police cars at station
         this.parkedSpots.push({
@@ -1551,6 +1659,252 @@ class World {
             z: -570 + 32,
             h: Math.PI / 2,
             police: true
+        });
+    }
+    /* ================= gas stations (repair & rest stop) ================= */ buildGasStations() {
+        for (const gs of this.spots.gasStations){
+            const side = gs.x >= 0 ? 1 : -1;
+            const gGeos = [];
+            // shop building
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(12, 4.5, 8, gs.x + side * 26, 2.25, gs.z, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#c8c2b4')));
+            this.colliders.push({
+                x: gs.x + side * 26,
+                z: gs.z,
+                hw: 6,
+                hd: 4,
+                h: 4.5
+            });
+            this.minimap.rects.push({
+                x: gs.x + side * 26,
+                z: gs.z,
+                hw: 6,
+                hd: 4,
+                t: 'b'
+            });
+            // canopy pillars + roof
+            for (const [px, pz] of [
+                [
+                    -5,
+                    -4
+                ],
+                [
+                    5,
+                    -4
+                ],
+                [
+                    -5,
+                    4
+                ],
+                [
+                    5,
+                    4
+                ]
+            ]){
+                const g = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CylinderGeometry"](0.28, 0.28, 5, 8).translate(gs.x + px, 2.5, gs.z + pz);
+                this.tintGeo(g, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#9a9a9a'));
+                gGeos.push(g);
+            }
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(16, 0.7, 14, gs.x, 5.3, gs.z, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#b03a2a')));
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(16, 0.5, 2.2, gs.x, 4.6, gs.z + 7.6, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#b03a2a')));
+            // pumps
+            for (const px of [
+                -2.5,
+                2.5
+            ]){
+                gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(1.1, 1.6, 0.8, gs.x + px, 0.8, gs.z, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#8a2f22')));
+                this.colliders.push({
+                    x: gs.x + px,
+                    z: gs.z,
+                    hw: 0.7,
+                    hd: 0.55,
+                    h: 1.6
+                });
+            }
+            const mesh = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](this.mergeAll(gGeos), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+                vertexColors: true
+            }));
+            mesh.castShadow = this.quality === 'high';
+            this.group.add(mesh);
+            this.addSign(gs.x + side * 8, gs.z + 12.5, side > 0 ? Math.PI : 0, 'گازولین — تعمیرگاه', 10, 1.9, '#7a1f14', '#ffd88a');
+        }
+    }
+    /* ================= farm ================= */ buildFarm() {
+        const f = this.spots.farm;
+        const gGeos = [];
+        // barn
+        gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(18, 8, 12, f.x, 4, f.z - 18, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#8a3a2a')));
+        gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(19, 1, 13, f.x, 8.4, f.z - 18, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#5a2418')));
+        this.colliders.push({
+            x: f.x,
+            z: f.z - 18,
+            hw: 9,
+            hd: 6,
+            h: 8
+        });
+        this.minimap.rects.push({
+            x: f.x,
+            z: f.z - 18,
+            hw: 9,
+            hd: 6,
+            t: 'b'
+        });
+        // silo
+        const silo = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CylinderGeometry"](3, 3.2, 13, 10).translate(f.x + 16, 6.5, f.z - 24);
+        this.tintGeo(silo, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#b0aa9e'));
+        gGeos.push(silo);
+        const siloTop = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["ConeGeometry"](3.5, 2.6, 10).translate(f.x + 16, 14.2, f.z - 24);
+        this.tintGeo(siloTop, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#7a6a50'));
+        gGeos.push(siloTop);
+        this.colliders.push({
+            x: f.x + 16,
+            z: f.z - 24,
+            hw: 3.2,
+            hd: 3.2,
+            h: 13
+        });
+        this.minimap.rects.push({
+            x: f.x + 16,
+            z: f.z - 24,
+            hw: 3.2,
+            hd: 3.2,
+            t: 'w'
+        });
+        // windmill
+        const mast = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CylinderGeometry"](0.25, 0.5, 12, 6).translate(f.x - 18, 6, f.z + 8);
+        this.tintGeo(mast, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#8a8478'));
+        gGeos.push(mast);
+        gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(4.4, 0.5, 0.15, f.x - 18, 11.6, f.z + 8, 0.5, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#7a7468')));
+        gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(4.4, 0.5, 0.15, f.x - 18, 11.6, f.z + 8, -0.5, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#7a7468')));
+        this.colliders.push({
+            x: f.x - 18,
+            z: f.z + 8,
+            hw: 0.6,
+            hd: 0.6,
+            h: 12
+        });
+        // hay bales
+        for(let i = 0; i < 5; i++){
+            const hay = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CylinderGeometry"](0.8, 0.8, 1.4, 9).rotateZ(Math.PI / 2).translate(f.x + (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(-10, 10), 0.8, f.z + (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(2, 12));
+            this.tintGeo(hay, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#c8a850'));
+            gGeos.push(hay);
+        }
+        // trough + fence posts around yard
+        for(let i = 0; i < 14; i++){
+            const a = i / 14 * Math.PI * 2;
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(0.16, 1.1, 0.16, f.x + Math.cos(a) * 30, 0.55, f.z + Math.sin(a) * 30, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#5a4028')));
+        }
+        const mesh = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](this.mergeAll(gGeos), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+            vertexColors: true
+        }));
+        mesh.castShadow = this.quality === 'high';
+        this.group.add(mesh);
+        // plowed field
+        const field = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["PlaneGeometry"](34, 22), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+            color: 0x5a4632,
+            map: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["texDesert"])()
+        }));
+        field.rotation.x = -Math.PI / 2;
+        field.position.set(f.x + 4, 0.04, f.z + 26);
+        this.group.add(field);
+        this.addSign(f.x - 6, f.z - 6, 0, 'مزرعه دلگون', 9, 1.8, '#4a3a20', '#e8d8a0');
+        this.firePoints.push(new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Vector3"](f.x - 4, 0.55, f.z - 4));
+        if (this.quality !== 'low') {
+            const l = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["PointLight"](0xff7a2a, 2.2, 26, 1.6);
+            l.position.set(f.x - 4, 1.6, f.z - 4);
+            this.group.add(l);
+            this.fireLights.push(l);
+            this.fireFlick.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(0, 10));
+        }
+    }
+    /* ================= lake & pier ================= */ buildLake() {
+        const cx = -650, cz = 750;
+        const water = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CircleGeometry"](130, 26), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+            color: 0x2e6a8a,
+            transparent: true,
+            opacity: 0.85
+        }));
+        water.rotation.x = -Math.PI / 2;
+        water.position.set(cx, 0.05, cz);
+        this.group.add(water);
+        // pier
+        const gGeos = [];
+        for(let i = 0; i < 8; i++){
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(3.4, 0.25, 2.2, cx + 62, 0.7, 690 + i * 8.6, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#6b4a28')));
+        }
+        for(let i = 0; i < 8; i += 2){
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(0.22, 2, 0.22, cx + 60.6, 0.5, 690 + i * 8.6 + 4, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#4a3520')));
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(0.22, 2, 0.22, cx + 63.4, 0.5, 690 + i * 8.6 + 4, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#4a3520')));
+        }
+        // rowboat
+        gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(1.8, 0.7, 5, cx - 40, 0.55, cz - 20, 0.4, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#7a5a34')));
+        gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(1.4, 0.5, 4.2, cx - 40, 0.85, cz - 20, 0.4, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#5a4024')));
+        // reeds
+        for(let i = 0; i < 26; i++){
+            const a = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(0, Math.PI * 2);
+            const r = 128 + (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(-4, 4);
+            const reed = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["ConeGeometry"](0.14, (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(1.2, 2.2), 5).translate(cx + Math.cos(a) * r, 0.7, cz + Math.sin(a) * r);
+            this.tintGeo(reed, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#5a7a3a'));
+            gGeos.push(reed);
+        }
+        const mesh = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](this.mergeAll(gGeos), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+            vertexColors: true
+        }));
+        mesh.castShadow = this.quality === 'high';
+        this.group.add(mesh);
+        this.addSign(cx + 66, 682, Math.PI, 'دریاچه آبی', 8, 1.7, '#1e3a4a', '#c8e8f0');
+    }
+    /* ================= radio tower ================= */ buildRadioTower() {
+        const t = this.spots.treasureSpot;
+        const gGeos = [];
+        for(let i = 0; i < 3; i++){
+            const h = 14, y = i * h + h / 2;
+            const r0 = 2.2 - i * 0.55, r1 = 2.2 - (i + 1) * 0.55;
+            gGeos.push(new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CylinderGeometry"](r1, r0, h, 4, 1, true).translate(t.x, y, t.z));
+            gGeos.push((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(0.14, 0.14, 0.14, t.x, y, t.z));
+        }
+        gGeos.push(new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["CylinderGeometry"](0.1, 0.1, 4, 5).translate(t.x, 43, t.z));
+        const mesh = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](this.mergeAll(gGeos, '#8a8f96'), new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+            vertexColors: true
+        }));
+        mesh.castShadow = this.quality === 'high';
+        this.group.add(mesh);
+        this.colliders.push({
+            x: t.x,
+            z: t.z,
+            hw: 2.4,
+            hd: 2.4,
+            h: 42
+        });
+        this.minimap.rects.push({
+            x: t.x,
+            z: t.z,
+            hw: 2.4,
+            hd: 2.4,
+            t: 'w'
+        });
+        // blinking beacon
+        this.radioBeacon = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Sprite"](new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SpriteMaterial"]({
+            map: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["texGlow"])(),
+            color: 0xff3030,
+            transparent: true,
+            opacity: 0.9,
+            depthWrite: false
+        }));
+        this.radioBeacon.scale.setScalar(6);
+        this.radioBeacon.position.set(t.x, 45.5, t.z);
+        this.group.add(this.radioBeacon);
+        // small hut at base
+        const hut = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["boxGeo"])(6, 3, 5, t.x + 8, 1.5, t.z + 6, 0, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Color"]('#9a948a'));
+        const hm = new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Mesh"](hut, new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["MeshLambertMaterial"]({
+            vertexColors: true
+        }));
+        this.group.add(hm);
+        this.colliders.push({
+            x: t.x + 8,
+            z: t.z + 6,
+            hw: 3,
+            hd: 2.5,
+            h: 3
         });
     }
     /* ================= traffic graph ================= */ buildGraph() {
@@ -1623,6 +1977,9 @@ class World {
         this.lampHeadMat.emissiveIntensity = night * 2.4;
         this.lampGlowMat.opacity = night * 0.85;
         this.poolMat.opacity = night * 0.5;
+        // radio beacon blink
+        this.blink += dt;
+        this.radioBeacon.material.opacity = Math.sin(this.blink * 2.2) > 0 ? 0.9 : 0.12;
         // fire flicker
         for(let i = 0; i < this.fireLights.length; i++){
             this.fireFlick[i] += dt * (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["rand"])(6, 12);
@@ -3890,6 +4247,36 @@ const WEAPONS = [
         ammoPack: 10,
         ammoCost: 55,
         sfx: 'rifle'
+    },
+    {
+        id: 'shotgun',
+        name: 'تفنگ شکاری',
+        dmg: 74,
+        rate: 1.05,
+        mag: 2,
+        reload: 2.5,
+        range: 42,
+        spreadHip: 0.09,
+        spreadAim: 0.055,
+        price: 450,
+        ammoPack: 10,
+        ammoCost: 45,
+        sfx: 'rifle'
+    },
+    {
+        id: 'smg',
+        name: 'مسلسل «رگبار»',
+        dmg: 17,
+        rate: 0.095,
+        mag: 30,
+        reload: 2,
+        range: 60,
+        spreadHip: 0.055,
+        spreadAim: 0.03,
+        price: 850,
+        ammoPack: 60,
+        ammoCost: 70,
+        sfx: 'pistol'
     }
 ];
 class Combat {
@@ -3985,7 +4372,7 @@ class Combat {
         });
     }
     spawnCivilians() {
-        const n = this.quality === 'low' ? 8 : this.quality === 'med' ? 13 : 18;
+        const n = this.quality === 'low' ? 12 : this.quality === 'med' ? 19 : 26;
         for(let i = 0; i < n; i++){
             let x, z;
             if (i % 3 === 0) {
@@ -4026,6 +4413,12 @@ class Combat {
                 }
             }
             this.spawnHuman('civ', new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Vector3"](x, 0, z));
+        }
+    }
+    /** raiders camped around the farm (virtual camp index 4) */ spawnFarmRaiders() {
+        for (const s of this.world.spots.farmRaiders){
+            if (this.quality === 'low' && Math.random() < 0.35) continue;
+            this.spawnHuman('bandit', new __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$three$2f$build$2f$three$2e$core$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Vector3"](s.x, 0, s.z), 4);
         }
     }
     spawnHuman(team, pos, camp) {
@@ -4290,7 +4683,7 @@ class Combat {
                 this.spawnPickup('cash', (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["randi"])(5, 25), h.pos);
             }
             if ((h.team === 'bandit' || h.team === 'cop') && Math.random() < 0.35) {
-                this.spawnPickup('ammo', this.weapon.def.id === 'rifle' ? 6 : 12, h.pos);
+                this.spawnPickup('ammo', this.weapon.def.id === 'rifle' || this.weapon.def.id === 'shotgun' ? 6 : 12, h.pos);
             }
         }
     }
@@ -4832,6 +5225,27 @@ class Missions {
                 giver: g.escape,
                 reward: 1500,
                 desc: 'می‌خواهی شهرتی شبیه افسانه‌ها داشته باشی؟ ۴ ستاره‌ی تعقیب را ۷۵ ثانیه زنده بمان...'
+            },
+            {
+                id: 'farmraid',
+                title: 'راهزنان مزرعه',
+                giver: g.farmraid,
+                reward: 900,
+                desc: 'راهزنان مزرعه دلگون را محاصره کرده‌اند و بار مزارع را می‌دزدند. کلانتر می‌گوید هر کدام را که از پا درآوردی، جایزه دارد. اسلحه خوب بردار!'
+            },
+            {
+                id: 'convoy',
+                title: 'کشتیر غله',
+                giver: g.convoy,
+                reward: 750,
+                desc: 'بار غله‌ی مزرعه باید به انبار شهر برسد. اول بار را بردار، بعد تا انبار غربی شهر بران — قبل از غروب!'
+            },
+            {
+                id: 'treasure',
+                title: 'نقشه گنج',
+                giver: g.treasure,
+                reward: 650,
+                desc: 'یک نقشه‌ی کهنه پای کلیسا پیدا شده: گنجی نزدیک «دکل رادیوی بیابان» دفن شده. نشان روی نقشه را دنبال کن.'
             }
         ];
         // giver markers (pulsing rings)
@@ -4860,6 +5274,11 @@ class Missions {
             this.killCount++;
             const need = 4;
             this.active.objective = `یاغی‌های کمپ شرقی را از بین ببر (${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["faNum"])(Math.min(this.killCount, need))} از ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["faNum"])(need)})`;
+            if (this.killCount >= need) this.complete();
+        } else if (id === 'farmraid' && team === 'bandit' && camp === 4) {
+            this.killCount++;
+            const need = 6;
+            this.active.objective = `راهزنان مزرعه را از پا درآور (${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["faNum"])(Math.min(this.killCount, need))} از ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["faNum"])(need)})`;
             if (this.killCount >= need) this.complete();
         } else if (id === 'duel' && team === 'duelist') {
             this.killCount++;
@@ -4927,6 +5346,28 @@ class Missions {
                     this.active.timer = 75;
                     this.active.target = null;
                     this.active.objective = '۷۵ ثانیه زنده بمان!';
+                    break;
+                }
+            case 'farmraid':
+                {
+                    this.active.stage = 'hunt';
+                    this.active.target = this.world.spots.farm;
+                    this.active.objective = 'راهزنان مزرعه را از پا درآور (۰ از ۶)';
+                    break;
+                }
+            case 'convoy':
+                {
+                    this.active.stage = 'pickup';
+                    this.active.target = def.giver;
+                    this.active.timer = 190;
+                    this.active.objective = 'بار غله را از مزرعه بردار';
+                    break;
+                }
+            case 'treasure':
+                {
+                    this.active.stage = 'seek';
+                    this.active.target = this.world.spots.treasureSpot;
+                    this.active.objective = 'به دکل رادیوی بیابان برس و گنج را بکاو';
                     break;
                 }
         }
@@ -5052,6 +5493,33 @@ class Missions {
                     m.objective = `${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$game$2f$utils$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["faNum"])(Math.ceil(m.timer))} ثانیه زنده بمان!`;
                     // keep pressure
                     if (Math.random() < dt * 0.25) this.combat.spawnCop(playerPos);
+                    break;
+                }
+            case 'convoy':
+                {
+                    m.timer -= dt;
+                    if (m.timer <= 0) {
+                        this.fail('وقت تمام شد');
+                        return;
+                    }
+                    if (m.stage === 'pickup' && dist(def.giver) < 5) {
+                        m.stage = 'deliver';
+                        m.target = this.world.spots.cityDepot;
+                        m.objective = 'غله را به انبار غربی شهر برسان';
+                        this.sfx.checkpoint();
+                    } else if (m.stage === 'deliver' && dist(m.target) < 6) {
+                        this.complete();
+                        return;
+                    }
+                    break;
+                }
+            case 'treasure':
+                {
+                    if (m.stage === 'seek' && dist(m.target) < 7) {
+                        m.objective = 'گنج پیدا شد!';
+                        this.complete();
+                        return;
+                    }
                     break;
                 }
         }

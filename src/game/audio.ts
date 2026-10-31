@@ -11,6 +11,8 @@ export class Sfx {
   private sirenGain: GainNode | null = null
   private windGain: GainNode | null = null
   private windFilter: BiquadFilterNode | null = null
+  private rainGain: GainNode | null = null
+  private rainSrc: AudioBufferSourceNode | null = null
   private ambientTimer: ReturnType<typeof setTimeout> | null = null
   private ambientOn = false
   muted = false
@@ -210,6 +212,39 @@ export class Sfx {
     const t = this.ctx.currentTime
     this.windGain.gain.setTargetAtTime(0.012 + Math.min(0.05, speed * 0.0025) + (night ? -0.004 : 0), t, 0.4)
     this.windFilter.frequency.setTargetAtTime(240 + speed * 8, t, 0.4)
+  }
+
+  /* ---- rain ambience ---- */
+  private ensureRain() {
+    if (!this.ctx || !this.master || !this.noiseBuf || this.rainSrc) return
+    const src = this.ctx.createBufferSource()
+    src.buffer = this.noiseBuf
+    src.loop = true
+    const hp = this.ctx.createBiquadFilter()
+    hp.type = 'highpass'
+    hp.frequency.value = 900
+    const lp = this.ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.value = 5200
+    const g = this.ctx.createGain()
+    g.gain.value = 0
+    src.connect(hp).connect(lp).connect(g).connect(this.master)
+    src.start()
+    this.rainSrc = src
+    this.rainGain = g
+  }
+  /** intensity 0..1 (fade in/out) */
+  rainUpdate(intensity: number) {
+    if (intensity > 0.01) this.ensureRain()
+    if (!this.rainGain || !this.ctx) return
+    this.rainGain.gain.setTargetAtTime(0.11 * intensity, this.ctx.currentTime, 0.8)
+  }
+  rainStop() {
+    if (this.rainGain && this.ctx) this.rainGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.6)
+    const src = this.rainSrc
+    if (src) setTimeout(() => { try { src.stop() } catch { /* ignore */ } }, 1600)
+    this.rainSrc = null
+    this.rainGain = null
   }
 
   /** lonely western plucks, occasionally */

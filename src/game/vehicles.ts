@@ -80,7 +80,7 @@ export class Vehicles {
       this.addCar(type, s.x, s.z, s.h, !!s.police)
     }
     // traffic
-    const n = this.quality === 'low' ? 8 : this.quality === 'med' ? 12 : 16
+    const n = this.quality === 'low' ? 12 : this.quality === 'med' ? 18 : 24
     for (let i = 0; i < n; i++) this.spawnTraffic()
     // horses
     for (const h of this.world.horseSpots) {

@@ -65,6 +65,18 @@ export class Missions {
         id: 'escape', title: 'فرار بزرگ', giver: g.escape, reward: 1500,
         desc: 'می‌خواهی شهرتی شبیه افسانه‌ها داشته باشی؟ ۴ ستاره‌ی تعقیب را ۷۵ ثانیه زنده بمان...',
       },
+      {
+        id: 'farmraid', title: 'راهزنان مزرعه', giver: g.farmraid, reward: 900,
+        desc: 'راهزنان مزرعه دلگون را محاصره کرده‌اند و بار مزارع را می‌دزدند. کلانتر می‌گوید هر کدام را که از پا درآوردی، جایزه دارد. اسلحه خوب بردار!',
+      },
+      {
+        id: 'convoy', title: 'کشتیر غله', giver: g.convoy, reward: 750,
+        desc: 'بار غله‌ی مزرعه باید به انبار شهر برسد. اول بار را بردار، بعد تا انبار غربی شهر بران — قبل از غروب!',
+      },
+      {
+        id: 'treasure', title: 'نقشه گنج', giver: g.treasure, reward: 650,
+        desc: 'یک نقشه‌ی کهنه پای کلیسا پیدا شده: گنجی نزدیک «دکل رادیوی بیابان» دفن شده. نشان روی نقشه را دنبال کن.',
+      },
     ]
 
     // giver markers (pulsing rings)
@@ -92,6 +104,11 @@ export class Missions {
       this.killCount++
       const need = 4
       this.active.objective = `یاغی‌های کمپ شرقی را از بین ببر (${faNum(Math.min(this.killCount, need))} از ${faNum(need)})`
+      if (this.killCount >= need) this.complete()
+    } else if (id === 'farmraid' && team === 'bandit' && camp === 4) {
+      this.killCount++
+      const need = 6
+      this.active.objective = `راهزنان مزرعه را از پا درآور (${faNum(Math.min(this.killCount, need))} از ${faNum(need)})`
       if (this.killCount >= need) this.complete()
     } else if (id === 'duel' && team === 'duelist') {
       this.killCount++
@@ -146,6 +163,25 @@ export class Missions {
         this.active.timer = 75
         this.active.target = null
         this.active.objective = '۷۵ ثانیه زنده بمان!'
+        break
+      }
+      case 'farmraid': {
+        this.active.stage = 'hunt'
+        this.active.target = this.world.spots.farm
+        this.active.objective = 'راهزنان مزرعه را از پا درآور (۰ از ۶)'
+        break
+      }
+      case 'convoy': {
+        this.active.stage = 'pickup'
+        this.active.target = def.giver
+        this.active.timer = 190
+        this.active.objective = 'بار غله را از مزرعه بردار'
+        break
+      }
+      case 'treasure': {
+        this.active.stage = 'seek'
+        this.active.target = this.world.spots.treasureSpot
+        this.active.objective = 'به دکل رادیوی بیابان برس و گنج را بکاو'
         break
       }
     }
@@ -262,6 +298,28 @@ export class Missions {
         m.objective = `${faNum(Math.ceil(m.timer))} ثانیه زنده بمان!`
         // keep pressure
         if (Math.random() < dt * 0.25) this.combat.spawnCop(playerPos)
+        break
+      }
+      case 'convoy': {
+        m.timer -= dt
+        if (m.timer <= 0) { this.fail('وقت تمام شد'); return }
+        if (m.stage === 'pickup' && dist(def.giver) < 5) {
+          m.stage = 'deliver'
+          m.target = this.world.spots.cityDepot
+          m.objective = 'غله را به انبار غربی شهر برسان'
+          this.sfx.checkpoint()
+        } else if (m.stage === 'deliver' && dist(m.target!) < 6) {
+          this.complete()
+          return
+        }
+        break
+      }
+      case 'treasure': {
+        if (m.stage === 'seek' && dist(m.target!) < 7) {
+          m.objective = 'گنج پیدا شد!'
+          this.complete()
+          return
+        }
         break
       }
     }

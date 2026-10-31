@@ -9,7 +9,7 @@ import { rand, randi, pick, clamp, segmentVsColliders, lerpAngle, faNum, type Bo
 
 /* ================= weapons ================= */
 export interface WeaponDef {
-  id: 'revolver' | 'pistol' | 'rifle'
+  id: 'revolver' | 'pistol' | 'rifle' | 'shotgun' | 'smg'
   name: string
   dmg: number
   rate: number
@@ -28,6 +28,8 @@ export const WEAPONS: WeaponDef[] = [
   { id: 'revolver', name: 'شش‌لول', dmg: 34, rate: 0.38, mag: 6, reload: 2.1, range: 70, spreadHip: 0.035, spreadAim: 0.008, price: 0, ammoPack: 12, ammoCost: 30, sfx: 'revolver' },
   { id: 'pistol', name: 'کلت برنی', dmg: 24, rate: 0.17, mag: 14, reload: 1.5, range: 80, spreadHip: 0.04, spreadAim: 0.014, price: 250, ammoPack: 24, ammoCost: 40, sfx: 'pistol' },
   { id: 'rifle', name: 'شاهین ۷۰۸', dmg: 65, rate: 0.95, mag: 5, reload: 2.6, range: 170, spreadHip: 0.05, spreadAim: 0.004, price: 600, ammoPack: 10, ammoCost: 55, sfx: 'rifle' },
+  { id: 'shotgun', name: 'تفنگ شکاری', dmg: 74, rate: 1.05, mag: 2, reload: 2.5, range: 42, spreadHip: 0.09, spreadAim: 0.055, price: 450, ammoPack: 10, ammoCost: 45, sfx: 'rifle' },
+  { id: 'smg', name: 'مسلسل «رگبار»', dmg: 17, rate: 0.095, mag: 30, reload: 2, range: 60, spreadHip: 0.055, spreadAim: 0.03, price: 850, ammoPack: 60, ammoCost: 70, sfx: 'pistol' },
 ]
 
 interface WeaponState { def: WeaponDef; mag: number; reserve: number; owned: boolean }
@@ -133,7 +135,7 @@ export class Combat {
   }
 
   spawnCivilians() {
-    const n = this.quality === 'low' ? 8 : this.quality === 'med' ? 13 : 18
+    const n = this.quality === 'low' ? 12 : this.quality === 'med' ? 19 : 26
     for (let i = 0; i < n; i++) {
       let x: number, z: number
       if (i % 3 === 0) {
@@ -152,6 +154,14 @@ export class Combat {
         }
       }
       this.spawnHuman('civ', new THREE.Vector3(x, 0, z))
+    }
+  }
+
+  /** raiders camped around the farm (virtual camp index 4) */
+  spawnFarmRaiders() {
+    for (const s of this.world.spots.farmRaiders) {
+      if (this.quality === 'low' && Math.random() < 0.35) continue
+      this.spawnHuman('bandit', new THREE.Vector3(s.x, 0, s.z), 4)
     }
   }
 
@@ -379,7 +389,7 @@ export class Combat {
         this.spawnPickup('cash', randi(5, 25), h.pos)
       }
       if ((h.team === 'bandit' || h.team === 'cop') && Math.random() < 0.35) {
-        this.spawnPickup('ammo', this.weapon.def.id === 'rifle' ? 6 : 12, h.pos)
+        this.spawnPickup('ammo', this.weapon.def.id === 'rifle' || this.weapon.def.id === 'shotgun' ? 6 : 12, h.pos)
       }
     }
   }
