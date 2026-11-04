@@ -1,3 +1,31 @@
-skills/
+# Dependencies
 node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Build output and caches
+.next/
+.next-export/
+out/
+dist/
+build/
+coverage/
+.turbo/
+.vercel/
+
+# Runtime databases and logs
+db/*.db
+db/*.db-*
+*.log
+
+# Local tools and generated files
+tool-results/
 pack/
+skills/
+
+# OS/editor
+.DS_Store
+Thumbs.db
